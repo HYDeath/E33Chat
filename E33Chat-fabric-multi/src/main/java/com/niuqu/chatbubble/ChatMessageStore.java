@@ -734,14 +734,18 @@ public class ChatMessageStore {
             packet.quoteContent(), mentioned ? java.util.List.of(local.getName().getString())
                 : java.util.List.of(), System.currentTimeMillis()));
         Text decoratedName = null;
-        if (!packet.nameplate().isEmpty() && bridgeNameplateFontAvailable(packet.nameplate()))
-            decoratedName = componentFrom(java.util.Map.of("json", packet.nameplate(),
-                "text", packet.displayName()), "json", "text");
-        if (decoratedName == null && !packet.displayJson().isEmpty())
+        // TrChat's chat display name matches what recipients see. CustomNameplates'
+        // floating nameplate may contain overhead-only world/command decorations.
+        if (!packet.displayJson().isEmpty())
             decoratedName = componentFrom(java.util.Map.of("json", packet.displayJson(),
                 "text", packet.displayName()), "json", "text");
+        if (decoratedName == null && !packet.nameplate().isEmpty()
+                && bridgeNameplateFontAvailable(packet.nameplate()))
+            decoratedName = componentFrom(java.util.Map.of("json", packet.nameplate(),
+                "text", packet.displayName()), "json", "text");
         if (decoratedName == null) decoratedName = Text.literal(packet.displayName());
-        if (!packet.privateMessage() && !packet.origin().isEmpty())
+        if (!packet.privateMessage() && !packet.origin().isEmpty()
+                && !decoratedName.getString().startsWith("[" + packet.origin() + "]"))
             decoratedName = Text.literal("[" + packet.origin() + "] ").append(decoratedName);
         String partner = packet.privateMessage() ? (own ? packet.recipient() : packet.account()) : null;
         if (own && packet.privateMessage() && partner != null)

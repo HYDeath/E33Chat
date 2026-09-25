@@ -292,6 +292,9 @@ public class ChatBubbleScreen extends ChatScreen {
         int inputW = sendX - ICON_S - 8 - inputX;
 
         chatField = new TextFieldWidget(textRenderer, inputX, ibY + 3, inputW, INPUT_H, Text.literal(""));
+        //#if MC >= 12111
+        chatField.addFormatter((value, offset) -> ColorEmojiText.decorate(Text.literal(value)).asOrderedText());
+        //#endif
         chatField.setMaxLength(256);
         chatField.setDrawsBackground(false);
         int editColor = theme() == ChatBubbleTheme.LIGHT ? c().textSecondary() : c().textPrimary();

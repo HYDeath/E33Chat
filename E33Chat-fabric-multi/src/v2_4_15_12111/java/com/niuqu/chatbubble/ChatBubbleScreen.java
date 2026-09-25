@@ -225,7 +225,7 @@ public class ChatBubbleScreen extends ChatScreen {
     private int notifBarTextY;
 
     public ChatBubbleScreen(String initialText) {
-        super("");
+        super("", false);
         this.initialText = initialText;
     }
 
@@ -463,7 +463,7 @@ public class ChatBubbleScreen extends ChatScreen {
         ColoredTextureRenderer.drawWithAlpha(g, UiTextureManager.rl(UiElement.INPUT_BG), sbx - 1, sby, sbw + 1, sbh, alpha);
         boolean hoverSearch = mouseX >= sbx - 1 && mouseX <= sbx + sbw && mouseY >= sby && mouseY <= sby + sbh;
         if (hoverSearch || sidebarSearchBox.isFocused())
-            g.drawBorder(sbx - 1, sby, sbw + 1, sbh, c().textMuted());
+            com.niuqu.chatbubble.UiCompat.drawBorder(g, sbx - 1, sby, sbw + 1, sbh, c().textMuted());
         if (sidebarSearchBox.getText().isEmpty() && !sidebarSearchBox.isFocused()) {
             g.drawText(textRenderer, Text.translatable("e33chat.sidebar.search").getString(), sbx, sby + 3, c().textMuted(), false);
         }
@@ -498,7 +498,7 @@ public class ChatBubbleScreen extends ChatScreen {
             int visibleBottom = msgBottom > 0 ? msgBottom : height - BAR_H;
             int totalH = 0;
             for (var info : players) {
-                String name = info.getProfile().getName();
+                String name = info.getProfile().name();
                 if (name.equals(selfName)) continue;
                 if (!filter.isEmpty() && !name.toLowerCase().contains(filter)) continue;
                 if (ChatBubbleClientSetup.config().isSidebarHidden(name)) continue;
@@ -520,7 +520,7 @@ public class ChatBubbleScreen extends ChatScreen {
                 g.enableScissor(0, startY, SIDEBAR_W, visibleBottom);
                 int scrollY = startY - sidebarScrollOffset;
                 for (var info : players) {
-                    String name = info.getProfile().getName();
+                    String name = info.getProfile().name();
                     if (name.equals(selfName)) continue;
                     if (!filter.isEmpty() && !name.toLowerCase().contains(filter)) continue;
                     if (ChatBubbleClientSetup.config().isSidebarHidden(name)) continue;
@@ -533,7 +533,7 @@ public class ChatBubbleScreen extends ChatScreen {
                         else if (hoverRow)
                             ColoredTextureRenderer.drawWithAlpha(g, UiTextureManager.rl(UiElement.SIDEBAR_HOVER), 0, scrollY, SIDEBAR_W, itemH, alpha);
 
-                        Identifier skin = com.niuqu.chatbubble.render.SkinResolver.getSkin(info.getProfile().getId(), info.getProfile().getName());
+                        Identifier skin = com.niuqu.chatbubble.render.SkinResolver.getSkin(info.getProfile().id(), info.getProfile().name());
                         drawPlayerHead(g, skin, 4, scrollY + 3, 16, 18, alpha);
 
                         int tipW = ChatMessageStore.hasUnreadWhisper(name) ? 16 : 0;
@@ -598,7 +598,7 @@ public class ChatBubbleScreen extends ChatScreen {
                 mentionFilter = after.toLowerCase();
                 mentionCandidates.clear();
                 for (var info : client.player.networkHandler.getPlayerList()) {
-                    String name = info.getProfile().getName();
+                    String name = info.getProfile().name();
                     if (name.toLowerCase().contains(mentionFilter))
                         mentionCandidates.add(name);
                 }
@@ -725,19 +725,19 @@ public class ChatBubbleScreen extends ChatScreen {
         Runnable render = renderer.apply(alpha);
         if (!animating) { render.run(); return; }
         if (style == AnimationStyle.ZOOM) {
-            g.getMatrices().push();
+            g.getMatrices().pushMatrix();
             float s = 0.85f + 0.15f * Animation.easeOutBack(alpha);
-            g.getMatrices().translate(width / 2f, height / 2f, 0);
-            g.getMatrices().scale(s, s, 1f);
-            g.getMatrices().translate(-width / 2f, -height / 2f, 0);
+            g.getMatrices().translate(width / 2f, height / 2f);
+            g.getMatrices().scale(s, s);
+            g.getMatrices().translate(-width / 2f, -height / 2f);
             render.run();
-            g.getMatrices().pop();
+            g.getMatrices().popMatrix();
         } else if (style == AnimationStyle.SLIDE) {
             // SLIDE: rise up from below while fading in; close sinks back down
-            g.getMatrices().push();
-            g.getMatrices().translate(0, (1f - alpha) * 10f, 0);
+            g.getMatrices().pushMatrix();
+            g.getMatrices().translate(0, (1f - alpha) * 10f);
             render.run();
-            g.getMatrices().pop();
+            g.getMatrices().popMatrix();
         } else {
             render.run();
         }
@@ -762,8 +762,8 @@ public class ChatBubbleScreen extends ChatScreen {
     }
 
     @Override
-    public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
-        return keyPressed(event.input(), event.scancode(), event.modifiers());
+    public boolean keyPressed(net.minecraft.client.input.KeyInput event) {
+        return keyPressed(event.key(), event.scancode(), event.modifiers());
     }
 
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
@@ -828,7 +828,7 @@ public class ChatBubbleScreen extends ChatScreen {
             }
         }
 
-        if (commandSuggestions != null && commandSuggestions.keyPressed(new net.minecraft.client.input.KeyEvent(keyCode, scanCode, modifiers)))
+        if (commandSuggestions != null && commandSuggestions.keyPressed(new net.minecraft.client.input.KeyInput(keyCode, scanCode, modifiers)))
             return true;
         if (keyCode == 256) { onClose(); return true; }
         if (groupCreateInput != null && groupCreateInput.isFocused() && (keyCode == 257 || keyCode == 335)) {
@@ -862,10 +862,10 @@ public class ChatBubbleScreen extends ChatScreen {
         // 不调 super.keyPressed（= ChatScreen，内部访问 package-private chatInputSuggestor = null → NPE）。
         // self 实现 Screen.keyPressed 等价分发：先给 focused widget（chatField TextFieldWidget 处理
         // backspace/删除/左右/Home/End/Ctrl+A/C/V/X），再 Tab/箭头焦点导航。
-        if (this.getFocused() != null && this.getFocused().keyPressed(new net.minecraft.client.input.KeyEvent(keyCode, scanCode, modifiers)))
+        if (this.getFocused() != null && this.getFocused().keyPressed(new net.minecraft.client.input.KeyInput(keyCode, scanCode, modifiers)))
             return true;
         net.minecraft.client.gui.navigation.GuiNavigation nav = switch (keyCode) {
-            case 258 -> new net.minecraft.client.gui.navigation.GuiNavigation.Tab(!Screen.hasShiftDown());
+            case 258 -> new net.minecraft.client.gui.navigation.GuiNavigation.Tab(!((modifiers & net.minecraft.client.util.InputUtil.GLFW_MOD_SHIFT) != 0));
             case 262 -> new net.minecraft.client.gui.navigation.GuiNavigation.Arrow(net.minecraft.client.gui.navigation.NavigationDirection.RIGHT);
             case 263 -> new net.minecraft.client.gui.navigation.GuiNavigation.Arrow(net.minecraft.client.gui.navigation.NavigationDirection.LEFT);
             case 264 -> new net.minecraft.client.gui.navigation.GuiNavigation.Arrow(net.minecraft.client.gui.navigation.NavigationDirection.DOWN);
@@ -923,7 +923,7 @@ public class ChatBubbleScreen extends ChatScreen {
     }
 
     @Override
-    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
+    public boolean mouseClicked(net.minecraft.client.gui.Click event, boolean doubleClick) {
         return mouseClicked(event.x(), event.y(), event.button());
     }
 
@@ -983,7 +983,7 @@ public class ChatBubbleScreen extends ChatScreen {
                 String filter = sidebarSearchBox.getText().toLowerCase().trim();
                 int scrollY = y2 - sidebarScrollOffset;
                 for (var info : players) {
-                    String name = info.getProfile().getName();
+                    String name = info.getProfile().name();
                     if (name.equals(selfName)) continue;
                     if (!filter.isEmpty() && !name.toLowerCase().contains(filter)) continue;
                     if (mouseY >= scrollY && mouseY <= scrollY + SIDEBAR_ITEM_H) {
@@ -1192,11 +1192,11 @@ public class ChatBubbleScreen extends ChatScreen {
                     // hand http(s) to the vanilla handler.
                     String clickUrl = com.niuqu.chatbubble.UiCompat.clickValue(click);
                     if (clickUrl != null && (clickUrl.startsWith("http://") || clickUrl.startsWith("https://"))) {
-                        defaultHandleClickEvent(style.getClickEvent(), minecraft, this);
+                        Screen.handleClickEvent(style.getClickEvent(), client, this);
                     }
                     return true;
                 }
-                defaultHandleClickEvent(style.getClickEvent(), minecraft, this); return true;
+                Screen.handleClickEvent(style.getClickEvent(), client, this); return true;
             }
         }
 
@@ -1284,7 +1284,7 @@ public class ChatBubbleScreen extends ChatScreen {
     }
 
     @Override
-    public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double dragX, double dragY) {
+    public boolean mouseDragged(net.minecraft.client.gui.Click event, double dragX, double dragY) {
         return mouseDragged(event.x(), event.y(), event.button(), dragX, dragY);
     }
 
@@ -1337,11 +1337,11 @@ public class ChatBubbleScreen extends ChatScreen {
             }
             return true;
         }
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        return super.mouseDragged(com.niuqu.chatbubble.UiCompat.mouse(mouseX, mouseY, button), dragX, dragY);
     }
 
     @Override
-    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event) {
+    public boolean mouseReleased(net.minecraft.client.gui.Click event) {
         return mouseReleased(event.x(), event.y(), event.button());
     }
 
@@ -1361,7 +1361,7 @@ public class ChatBubbleScreen extends ChatScreen {
             inputDragAnchor = -1;
         }
         if (scrollbarDragging) { scrollbarDragging = false; return true; }
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(com.niuqu.chatbubble.UiCompat.mouse(mouseX, mouseY, button));
     }
 
     private boolean handleIconClick(int mx, int my) {
@@ -1469,7 +1469,7 @@ public class ChatBubbleScreen extends ChatScreen {
     }
 
     @Override
-    public void extractRenderState(DrawContext g, int mouseX, int mouseY, float delta) {
+    public void render(DrawContext g, int mouseX, int mouseY, float delta) {
         tickSidebarAnimation();
 
         float anim = getAnimProgress();
@@ -1479,13 +1479,13 @@ public class ChatBubbleScreen extends ChatScreen {
         float panelScale = 1f;
         if (zoom) panelScale = 0.8f + 0.2f * Animation.easeOutBack(anim);
 
-        g.getMatrices().push();
-        g.getMatrices().translate(panelOffset, 0, 0);
+        g.getMatrices().pushMatrix();
+        g.getMatrices().translate(panelOffset, 0);
         if (zoom) {
             float cx = panelX + panelW / 2f;
-            g.getMatrices().translate(cx, height / 2f, 0);
-            g.getMatrices().scale(panelScale, panelScale, 1f);
-            g.getMatrices().translate(-cx, -height / 2f, 0);
+            g.getMatrices().translate(cx, height / 2f);
+            g.getMatrices().scale(panelScale, panelScale);
+            g.getMatrices().translate(-cx, -height / 2f);
         }
 
         float panelOpacity = ChatBubbleClientSetup.config().panelOpacity() / 100f * anim;
@@ -1496,7 +1496,7 @@ public class ChatBubbleScreen extends ChatScreen {
         int fillLeft = (!sidebarAnimating && sidebarOpen && pstyle == AnimationStyle.SLIDE)
             ? (int)(anim * SIDEBAR_W) : panelX;
         if (ChatBubbleClientSetup.config().blurEnabled() && panelOpacity < 0.999f && !zoom) {
-            g.draw();
+
             BlurRenderer.blurPanel(panelOffset + fillLeft, 0, panelX + panelW - fillLeft, height);
         }
         // 2.4.10: 自定义背景图可用时替代默认 PANEL_BG 纹理（不透明度与面板不透明度相乘）
@@ -1515,11 +1515,11 @@ public class ChatBubbleScreen extends ChatScreen {
         renderMessages(g, mouseX, mouseY);
         Style hovered = getHoveredStyle(mouseX, mouseY);
         if (hovered != null && hovered.getHoverEvent() != null) {
-            if (hovered.getHoverEvent() instanceof net.minecraft.network.chat.HoverEvent.ShowText show)
-                g.setTooltipForNextFrame(show.value(), mouseX, mouseY);
+            if (hovered.getHoverEvent() instanceof net.minecraft.text.HoverEvent.ShowText show)
+                g.drawTooltip(textRenderer, show.value(), mouseX, mouseY);
         }
 
-        g.getMatrices().translate(0, 0, 50);
+        g.getMatrices().translate(0, 0);
         renderNotificationBar(g, mouseX, mouseY);
         renderReplyBar(g, mouseX, mouseY);
         renderContextMenu(g, mouseX, mouseY);
@@ -1529,8 +1529,8 @@ public class ChatBubbleScreen extends ChatScreen {
         renderMentionPopup(g, mouseX, mouseY);
         // 弹层面板（设置/表情/快捷/搜索）画在底栏之上，z 高一层——侧边栏同 z 后画
         // 会盖住它们，提升弹层 z 到侧边栏之上避免遮挡
-        g.getMatrices().push();
-        g.getMatrices().translate(0, 0, 100);
+        g.getMatrices().pushMatrix();
+        g.getMatrices().translate(0, 0);
         renderPopupWithAnim(g, settingsAnimStart, settingsCloseStart, a -> () -> settingsMenu.render(g, mouseX, mouseY, textRenderer, c(), panelX, panelW, barTop, ChatBubbleScreen::iconTex, a));
         renderPopupWithAnim(g, emojiAnimStart, emojiCloseStart, a -> () -> emojiPanel.render(g, mouseX, mouseY, textRenderer, c(), panelX, panelW, barTop, ICON_S, PAD, a));
         renderPopupWithAnim(g, quickAnimStart, quickCloseStart, a -> () -> quickChatPanel.render(g, mouseX, mouseY, textRenderer, c(), panelX, panelW, barTop, quickChatInput, a));
@@ -1542,18 +1542,18 @@ public class ChatBubbleScreen extends ChatScreen {
         if (quickChatPanel.visible && quickChatInput != null) quickChatInput.render(g, mouseX, mouseY, delta);
         if (searchPanel.visible && searchInput != null) searchInput.render(g, mouseX, mouseY, delta);
         if (groupBrowser.visible && groupCreateInput != null) groupCreateInput.render(g, mouseX, mouseY, delta);
-        g.getMatrices().pop();
+        g.getMatrices().popMatrix();
 
-        g.getMatrices().pop();
+        g.getMatrices().popMatrix();
 
         if (sidebarOpen || sidebarAnimating) {
-            g.getMatrices().push();
+            g.getMatrices().pushMatrix();
             // ZOOM: the sidebar scales with the panel around the panel center
             if (zoom) {
                 float cx = panelX + panelW / 2f;
-                g.getMatrices().translate(cx, height / 2f, 0);
-                g.getMatrices().scale(panelScale, panelScale, 1f);
-                g.getMatrices().translate(-cx, -height / 2f, 0);
+                g.getMatrices().translate(cx, height / 2f);
+                g.getMatrices().scale(panelScale, panelScale);
+                g.getMatrices().translate(-cx, -height / 2f);
             }
             // Fade/zoom-in-place applies only to the panel's own open/close
             // animation; the hamburger toggle always slides.
@@ -1561,16 +1561,16 @@ public class ChatBubbleScreen extends ChatScreen {
             int sidebarOffset = (closing && !fadeSidebar)
                 ? (int) ((getAnimProgress() - 1.0f) * SIDEBAR_W)
                 : (fadeSidebar ? 0 : getSidebarScreenX());
-            g.getMatrices().translate(sidebarOffset, 0, 50);
+            g.getMatrices().translate(sidebarOffset, 0);
             // Per-element alpha (vanilla drawTexture ignores setShaderColor; the
             // sidebar fades its own textures through the alpha path)
             renderSidebar(g, mouseX - sidebarOffset, mouseY, fadeSidebar ? getAnimProgress() : 1f);
-            g.getMatrices().pop();
+            g.getMatrices().popMatrix();
             if (closing) sidebarSearchBox.setX(2 + sidebarOffset);
         }
 
-        g.getMatrices().push();
-        g.getMatrices().translate(0, 0, 50);
+        g.getMatrices().pushMatrix();
+        g.getMatrices().translate(0, 0);
         chatField.setX(inputX + panelOffset);
         // 不调 super.render（ChatScreen.render 访问 package-private chatInputSuggestor，
         // 跨包无法初始化）；复制 Screen.render 的 widgets 遍历渲染
@@ -1581,7 +1581,7 @@ public class ChatBubbleScreen extends ChatScreen {
         g.enableScissor(panelX, 0, panelX + panelW, height);
         if (commandSuggestions != null) commandSuggestions.render(g, mouseX, mouseY);
         g.disableScissor();
-        g.getMatrices().pop();
+        g.getMatrices().popMatrix();
 
         com.niuqu.chatbubble.render.ChatBubbleHudOverlay.renderBannerForScreen(g);
     }
@@ -1883,8 +1883,8 @@ public class ChatBubbleScreen extends ChatScreen {
                     }
                 }
             }
-            g.getMatrices().push();
-            g.getMatrices().translate(mDx, mDy, 0);
+            g.getMatrices().pushMatrix();
+            g.getMatrices().translate(mDx, mDy);
             if (mScale != 1f) {
                 // Bubble top-left for the ZOOM pivot (mirrors renderBubble's layout incl. bubble_size)
                 float bs = Appearance.bubbleScale(textRenderer.fontHeight);
@@ -1897,12 +1897,12 @@ public class ChatBubbleScreen extends ChatScreen {
                     ? panelX + panelW - PAD - Appearance.avatarSize() - 4 - zBubbleW
                     : panelX + PAD + Appearance.avatarSize() + 4;
                 int zBubbleY = screenY + (grouped ? 0 : NAME_H);
-                g.getMatrices().translate(zBubbleX + zBubbleW / 2f, zBubbleY, 0);
-                g.getMatrices().scale(mScale, mScale, 1f);
-                g.getMatrices().translate(-(zBubbleX + zBubbleW / 2f), -zBubbleY, 0);
+                g.getMatrices().translate(zBubbleX + zBubbleW / 2f, zBubbleY);
+                g.getMatrices().scale(mScale, mScale);
+                g.getMatrices().translate(-(zBubbleX + zBubbleW / 2f), -zBubbleY);
             }
             renderBubble(g, msg, fullIdx, screenY, mouseX, mouseY, mAlpha, showAvatar);
-            g.getMatrices().pop();
+            g.getMatrices().popMatrix();
             fullIdx++;
         }
         renderScrollbar(g, mouseX, mouseY, effectiveMsgBottom);
@@ -2059,10 +2059,10 @@ public class ChatBubbleScreen extends ChatScreen {
             } else if (click.getAction() == ClickEvent.Action.OPEN_URL) {
                 String clickUrl = com.niuqu.chatbubble.UiCompat.clickValue(click);
                 if (clickUrl != null && (clickUrl.startsWith("http://") || clickUrl.startsWith("https://"))) {
-                    defaultHandleClickEvent(style.getClickEvent(), minecraft, this);
+                    Screen.handleClickEvent(style.getClickEvent(), client, this);
                 }
             } else {
-                defaultHandleClickEvent(style.getClickEvent(), minecraft, this);
+                Screen.handleClickEvent(style.getClickEvent(), client, this);
             }
         }
     }
@@ -2337,12 +2337,12 @@ public class ChatBubbleScreen extends ChatScreen {
                 : bubbleY + (int)(BUBBLE_PAD_Y * s) + (int)(li * textRenderer.fontHeight * s);
             int beforeText = textSpans.size();
             int beforeLine = clickableSpans.size();
-            g.getMatrices().push();
-            g.getMatrices().translate(textSX, textSY, 0);
-            if (s != 1f) g.getMatrices().scale(s, s, 1f);
+            g.getMatrices().pushMatrix();
+            g.getMatrices().translate(textSX, textSY);
+            if (s != 1f) g.getMatrices().scale(s, s);
             renderLineWithClicks(g, lines.get(li), 0, 0, fgA, fbP,
                 index, li, TextSpan.KIND_CONTENT, s, bg, textSelection);
-            g.getMatrices().pop();
+            g.getMatrices().popMatrix();
             for (int i = beforeLine; i < clickableSpans.size(); i++) {
                 ClickableSpan sp = clickableSpans.get(i);
                 clickableSpans.set(i, new ClickableSpan(
@@ -2373,11 +2373,11 @@ public class ChatBubbleScreen extends ChatScreen {
             int labelW = (int)(textRenderer.getWidth(label) * s);
             int labelX, labelY = bubbleY + (bubbleH - (int)(textRenderer.fontHeight * s)) / 2;
             if (own) { labelX = bubbleX - labelW - 3; } else { labelX = bubbleX + bubbleW + 3; }
-            g.getMatrices().push();
-            g.getMatrices().translate(labelX, labelY, 0);
-            if (s != 1f) g.getMatrices().scale(s, s, 1f);
+            g.getMatrices().pushMatrix();
+            g.getMatrices().translate(labelX, labelY);
+            if (s != 1f) g.getMatrices().scale(s, s);
             g.drawText(textRenderer, label, 0, 0, ChatBubbleTheme.alphaBlend(c().duplicateLabel(), (int)(255 * alpha)), false);
-            g.getMatrices().pop();
+            g.getMatrices().popMatrix();
         }
 
         if (msg.replyContent() != null) {
@@ -2396,13 +2396,13 @@ public class ChatBubbleScreen extends ChatScreen {
             // 引用块：SDF 圆角（随 bubble_size 缩放）
             RoundRectRenderer.fill(g, quoteX, quoteY, quoteX + quoteW, quoteY + quoteH, ChatBubbleClientSetup.config().bubbleCornerRadius() * s, ChatBubbleTheme.alphaBlend(c().contextHover(), (int)(255 * alpha)));
             int beforeText = textSpans.size();
-            g.getMatrices().push();
-            g.getMatrices().translate(quoteX + (int)(4 * s), quoteY + (int)(2 * s), 0);
-            if (s != 1f) g.getMatrices().scale(s, s, 1f);
+            g.getMatrices().pushMatrix();
+            g.getMatrices().translate(quoteX + (int)(4 * s), quoteY + (int)(2 * s));
+            if (s != 1f) g.getMatrices().scale(s, s);
             renderLineWithClicks(g, Text.literal(quoteDisplay).asOrderedText(), 0, 0,
                 ChatBubbleTheme.alphaBlend(c().textSecondary(), (int) (255 * alpha)), null,
                 index, 0, TextSpan.KIND_QUOTE, s, c().contextHover(), textSelection);
-            g.getMatrices().pop();
+            g.getMatrices().popMatrix();
             for (int i = beforeText; i < textSpans.size(); i++) {
                 TextSpan sp = textSpans.get(i);
                 textSpans.set(i, sp.withPosition(
@@ -2416,7 +2416,7 @@ public class ChatBubbleScreen extends ChatScreen {
         bubbleRects.add(new int[]{bubbleX, bubbleY, bubbleW, bubbleH, index});
 
         if (index == searchHighlightIndex)
-            g.drawBorder(bubbleX - 1, bubbleY - 1, bubbleW + 2, bubbleH + 2, ChatSearchPanel.HIGHLIGHT);
+            com.niuqu.chatbubble.UiCompat.drawBorder(g, bubbleX - 1, bubbleY - 1, bubbleW + 2, bubbleH + 2, ChatSearchPanel.HIGHLIGHT);
     }
 
     /** Bubble-less image message: name + avatar + optional text + images
@@ -2491,12 +2491,12 @@ public class ChatBubbleScreen extends ChatScreen {
             }
             int imgX = own ? (avatarX - UiTokens.AVATAR_NAME_GAP - w) : (avatarX + Appearance.avatarSize() + UiTokens.AVATAR_GAP);
             if (animatedFrame != null) {
-                g.drawTexture(animatedFrame.texture(), imgX, y, w, h,
+                com.niuqu.chatbubble.RenderHelper.drawTexture(g, animatedFrame.texture(), imgX, y, w, h,
                     0, 0, animatedFrame.width(), animatedFrame.height(), animatedFrame.width(), animatedFrame.height());
             } else {
                 ImageEntry entry = animatedPending(animated) ? null : ImageLoader.getOrLoad(ref.url());
                 if (entry != null && entry.state() == ImageEntry.State.LOADED && entry.textureId() != null) {
-                    g.drawTexture(entry.textureId(), imgX, y, w, h,
+                    com.niuqu.chatbubble.RenderHelper.drawTexture(g, entry.textureId(), imgX, y, w, h,
                         0, 0, entry.width(), entry.height(), entry.width(), entry.height());
                 } else {
                     boolean limited = entry != null && entry.state() == ImageEntry.State.FAILED
@@ -2512,8 +2512,8 @@ public class ChatBubbleScreen extends ChatScreen {
             }
             // Open the URL in the system browser on click; hover shows the URL
             Style st = Style.EMPTY
-                .withClickEvent(new net.minecraft.network.chat.ClickEvent.OpenUrl(java.net.URI.create(ref.url())))
-                .withHoverEvent(new net.minecraft.network.chat.HoverEvent.ShowText(Text.literal(ref.url())));
+                .withClickEvent(new net.minecraft.text.ClickEvent.OpenUrl(java.net.URI.create(ref.url())))
+                .withHoverEvent(new net.minecraft.text.HoverEvent.ShowText(Text.literal(ref.url())));
             clickableSpans.add(new ClickableSpan(imgX, y, w, h, st));
             y += h + 2;
         }
@@ -2598,12 +2598,12 @@ public class ChatBubbleScreen extends ChatScreen {
         }
         int emoteX = own ? (avatarX - UiTokens.AVATAR_NAME_GAP - w) : (avatarX + Appearance.avatarSize() + UiTokens.AVATAR_GAP);
         if (animatedFrame != null) {
-            g.drawTexture(animatedFrame.texture(), emoteX, emoteY, w, h,
+            com.niuqu.chatbubble.RenderHelper.drawTexture(g, animatedFrame.texture(), emoteX, emoteY, w, h,
                 0, 0, animatedFrame.width(), animatedFrame.height(), animatedFrame.width(), animatedFrame.height());
         } else {
             ImageEntry entry = animatedPending(animated) ? null : ImageLoader.getOrLoad(ref.url());
             if (entry != null && entry.state() == ImageEntry.State.LOADED && entry.textureId() != null) {
-                g.drawTexture(entry.textureId(), emoteX, emoteY, w, h,
+                com.niuqu.chatbubble.RenderHelper.drawTexture(g, entry.textureId(), emoteX, emoteY, w, h,
                     0, 0, entry.width(), entry.height(), entry.width(), entry.height());
             } else {
                 boolean limited = entry != null && entry.state() == ImageEntry.State.FAILED
@@ -2957,7 +2957,7 @@ public class ChatBubbleScreen extends ChatScreen {
         if (popupY < msgTop) popupY = chatField.getY() + chatField.getHeight() + 2;
 
         ColoredTextureRenderer.drawWithAlpha(g, UiTextureManager.rl(UiElement.POPUP_BG), popupX, popupY, popupW, popupH, getAnimProgress());
-        g.drawBorder(popupX, popupY, popupW, popupH, ChatBubbleTheme.alphaBlend(c().divider(), (int) (255 * getAnimProgress())));
+        com.niuqu.chatbubble.UiCompat.drawBorder(g, popupX, popupY, popupW, popupH, ChatBubbleTheme.alphaBlend(c().divider(), (int) (255 * getAnimProgress())));
 
         int startIdx = Math.max(0, mentionIdx - visible + 1);
         int endIdx = Math.min(mentionCandidates.size(), startIdx + visible);
@@ -3112,7 +3112,7 @@ public class ChatBubbleScreen extends ChatScreen {
 
         boolean hoverInput = mouseX >= ibX - 1 && mouseX <= ibX + ibW && mouseY >= ibY && mouseY <= ibY + ibH;
         if (hoverInput || chatField.isFocused())
-            g.drawBorder(ibX - 1, ibY, ibW + 1, ibH, ChatBubbleTheme.alphaBlend(c().textMuted(), a255));
+            com.niuqu.chatbubble.UiCompat.drawBorder(g, ibX - 1, ibY, ibW + 1, ibH, ChatBubbleTheme.alphaBlend(c().textMuted(), a255));
 
         int gearX = panelX + 4;
         int sendX = panelX + panelW - PAD - ICON_S + 2;
@@ -3138,15 +3138,15 @@ public class ChatBubbleScreen extends ChatScreen {
 
     static void drawTextureIcon(DrawContext g, Identifier tex, int x, int y, int size) {
         // getTexture 无缓存时自动 new ResourceTexture 懒加载（资源包可覆盖，F3+T 即时生效）
-        
-        
-        
+
+
+
         if (size < 16) {
             // 图标纹理约定 16x16（内容居中，四周 1px 透明边，内容占 14x14）。采样内容区
             // (偏移1,1) 完整 14x14 绘制——窗口取 size 会切掉内容右/下 2px（copy 右页被切）。
-            g.drawTexture(tex, x, y, size, size, 1.0F, 1.0F, 14, 14, 16, 16);
+            com.niuqu.chatbubble.RenderHelper.drawTexture(g, tex, x, y, size, size, 1.0F, 1.0F, 14, 14, 16, 16);
         } else {
-            g.drawTexture(tex, x, y, 0, 0, size, size, size, size);
+            com.niuqu.chatbubble.RenderHelper.drawTexture(g, tex, x, y, 0, 0, size, size, size, size);
         }
     }
 

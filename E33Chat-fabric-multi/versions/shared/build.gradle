@@ -33,6 +33,7 @@ final int mcVersion = project.mcVersion.toString().toInteger()
 // MC 26.x 取消了混淆，使用 Mojang 官方名称，无需 Yarn mappings
 def isMinecraft26x = mcVersion >= 26000
 if (isMinecraft26x) version = rootProject.mod_version_26x
+if (mcVersion == 12111) version = rootProject.mod_version_12111
 
 // 输出文件名
 base.archivesName = project.archives_base_name
@@ -108,11 +109,10 @@ tasks.withType(JavaCompile).configureEach {
 def mainProjectName = file("${rootProject.projectDir}/versions/mainProject").text.trim()
 
 // 共享源码目录（含预处理指令）
-// The 26.x port starts from the complete upstream Fabric 2.4.15 source tree.
-// Keep the older multi-version source intact for pre-26 targets while the
-// official Fabric implementation is adapted to Mojang mappings and 26.x APIs.
-def sharedSrcDir = file("${rootProject.projectDir}/src/${isMinecraft26x ? 'v2_4_15' : 'main'}/java")
-def sharedResDir = file("${rootProject.projectDir}/src/${isMinecraft26x ? 'v2_4_15' : 'main'}/resources")
+// 26.x and 1.21.11 share the 2.4.15 feature baseline, with separate sources
+// for their incompatible GUI/input APIs. Older targets retain the 2.3.x tree.
+def sharedSrcDir = file("${rootProject.projectDir}/src/${isMinecraft26x ? 'v2_4_15' : mcVersion == 12111 ? 'v2_4_15_12111' : 'main'}/java")
+def sharedResDir = file("${rootProject.projectDir}/src/${isMinecraft26x || mcVersion == 12111 ? 'v2_4_15' : 'main'}/resources")
 def versionJavaDir = file("${project.projectDir}/src/main/java")
 def versionResDir = file("${project.projectDir}/src/main/resources")
 def preprocessedDir = file("${buildDir}/preprocessed/main/java")
