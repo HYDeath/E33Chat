@@ -4,7 +4,7 @@ This branch produces a single Bukkit `TrChat` Jar targeting Java 21 bytecode. In
 
 ## Setup
 
-1. Build with Java 21: `./gradlew :plugin:build`. Install `plugin/build/libs/TrChat-2.5.3+e33compat.16.jar` on each backend. Remove older TrChat Jars so the server does not load the wrong version or duplicate plugin name. Restart each backend, then update the client to `e33chat-Fabric-1.21.11-2.4.15+compat.2.jar` or the matching 26.x build and restart Minecraft. Install the backend plugin first: the client advertises `e33chat:downstream_v3`.
+1. Build with Java 21: `./gradlew :plugin:build`. Install `plugin/build/libs/TrChat-2.5.3+e33compat.16.jar` on each backend. Remove older TrChat Jars so the server does not load the wrong version or duplicate plugin name. Restart each backend, then update the client to `e33chat-Fabric-1.21.11-2.4.15+compat.3.jar` or the matching 26.x build and restart Minecraft. Install the backend plugin first: the client advertises `e33chat:downstream_v3`.
 2. In each backend's TrChat `settings.yml`, set `Redis.enabled: true` and the same Redis host/port/credentials. The bridge reads PlaceholderAPI `%server_name%` on the sending backend for the source server prefix; `e33.server-id` in TrChat's Bukkit config remains the fallback. No proxy plugin is required.
 3. Optional PlaceholderAPI plus CMI permits `%cmi_user_display_name%` resolution. Without it, the player's Bukkit display name and finally account name are used. Duplicate display names are not automatically resolved for private messaging or mention targeting.
 4. Set `trchat.admin` for users allowed to open `/e33chat gui`, edit templates or save the E33 server-config screen. The server rechecks this permission on incoming save packets.

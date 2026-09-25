@@ -1438,7 +1438,7 @@ public class ChatBubbleScreen extends ChatScreen {
                 toggleBlockedPlayer();
             } else if (my >= menuY + CTX_ITEM_H * 3 + 6 && my <= menuY + menuH) {
                 // 2.4.10 玩家资料卡：菜单收起后叠加打开（parent 回聊天界面）
-                client.setScreen(new com.niuqu.chatbubble.ui.PlayerProfileScreen(this, name));
+                client.setScreen(new com.niuqu.chatbubble.ui.PlayerProfileScreen(this, name, msg.senderUUID()));
             }
         }
         contextAvatarIndex = -1;

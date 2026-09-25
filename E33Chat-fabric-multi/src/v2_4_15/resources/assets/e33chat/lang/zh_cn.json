@@ -325,7 +325,7 @@
   "e33chat.profile.title": "玩家资料",
   "e33chat.profile.self": "[自己]",
   "e33chat.profile.online": "[在线]",
-  "e33chat.profile.offline": "[离线]",
+  "e33chat.profile.unknown": "[状态未知]",
   "e33chat.profile.uuid": "UUID",
   "e33chat.profile.latency": "延迟",
   "e33chat.profile.gamemode": "模式",

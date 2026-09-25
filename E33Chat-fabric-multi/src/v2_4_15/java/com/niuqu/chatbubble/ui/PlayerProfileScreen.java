@@ -17,8 +17,8 @@ import java.util.UUID;
 
 /**
  * 玩家资料卡（2.4.10）：右键头像菜单"查看资料"打开。展示头像（face+hat）、
- * 名称、在线状态、UUID、延迟、游戏模式，带 私聊 / 复制UUID 快捷操作。
- * Esc 或点遮罩返回聊天界面。纯客户端（tab 列表信息），零服务器依赖。
+ * 名称、本服 TAB 状态、UUID、延迟、游戏模式，带 私聊 / 复制UUID 快捷操作。
+ * Esc 或点遮罩返回聊天界面。纯客户端；TAB 缺席不等于跨服离线。
  */
 public class PlayerProfileScreen extends Screen {
 
@@ -28,15 +28,17 @@ public class PlayerProfileScreen extends Screen {
 
     private final Screen parent;
     private final String playerName;
+    private final UUID playerUuid;
 
     // Layout (computed in init/relocated on resize)
     private int panelX, panelY;
     private int btnWhisperX, btnCopyX, btnY, btnW;
 
-    public PlayerProfileScreen(Screen parent, String playerName) {
+    public PlayerProfileScreen(Screen parent, String playerName, UUID playerUuid) {
         super(Text.translatable("e33chat.profile.title"));
         this.parent = parent;
         this.playerName = playerName;
+        this.playerUuid = playerUuid != null && !playerUuid.equals(new UUID(0, 0)) ? playerUuid : null;
     }
 
     @Override
@@ -51,7 +53,13 @@ public class PlayerProfileScreen extends Screen {
 
     private PlayerListEntry info() {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null) return null;
+        if (mc.player == null || mc.getNetworkHandler() == null) return null;
+        if (playerUuid != null) {
+            for (PlayerListEntry p : mc.getNetworkHandler().getPlayerList()) {
+                if (playerUuid.equals(p.getProfile().getId())) return p;
+            }
+            return null;
+        }
         PlayerListEntry exact = mc.getNetworkHandler().getPlayerListEntry(playerName);
         if (exact != null) return exact;
         for (PlayerListEntry p : mc.getNetworkHandler().getPlayerList()) {
@@ -76,8 +84,10 @@ public class PlayerProfileScreen extends Screen {
         PlayerListEntry info = info();
         boolean online = info != null;
         boolean isSelf = MinecraftClient.getInstance().player != null
-            && MinecraftClient.getInstance().player.getName().getString().equalsIgnoreCase(playerName);
-        UUID uuid = online ? info.getProfile().getId() : null;
+            && (playerUuid != null
+                ? playerUuid.equals(MinecraftClient.getInstance().player.getUuid())
+                : MinecraftClient.getInstance().player.getName().getString().equalsIgnoreCase(playerName));
+        UUID uuid = online ? info.getProfile().getId() : playerUuid;
 
         // Hero: head (face + hat layer)
         int headS = 40;
@@ -92,7 +102,7 @@ public class PlayerProfileScreen extends Screen {
         // Name + badge
         int nameW = textRenderer.getWidth(playerName);
         String badge = Text.translatable(isSelf ? "e33chat.profile.self"
-            : online ? "e33chat.profile.online" : "e33chat.profile.offline").getString();
+            : online ? "e33chat.profile.online" : "e33chat.profile.unknown").getString();
         int badgeColor = isSelf ? 0xFF55FFFF : online ? 0xFF55FF55 : 0xFF888888;
         int totalW = nameW + 6 + textRenderer.getWidth(badge);
         int nameX = panelX + (PANEL_W - totalW) / 2;
@@ -156,7 +166,8 @@ public class PlayerProfileScreen extends Screen {
             }
             if (over(mouseX, mouseY, btnCopyX, btnY, btnW, BTN_H)) {
                 PlayerListEntry info = info();
-                String text = info != null ? info.getProfile().getId().toString() : playerName;
+                String text = info != null ? info.getProfile().getId().toString()
+                    : playerUuid != null ? playerUuid.toString() : playerName;
                 MinecraftClient.getInstance().keyboard.setClipboard(text);
                 return true;
             }

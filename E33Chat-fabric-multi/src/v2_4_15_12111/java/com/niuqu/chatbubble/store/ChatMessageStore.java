@@ -365,6 +365,38 @@ public class ChatMessageStore {
                 isOwn, isSystem, newReplyContent, newReplySender, messageHash, duplicateCount,
                 rawPlayerName, whisper, whisperPartner, group);
         }
+
+        public ChatMessage withOwn(boolean own) {
+            return new ChatMessage(senderUUID, senderName, content, time,
+                own, isSystem, replyContent, replySender, messageHash, duplicateCount,
+                rawPlayerName, whisper, whisperPartner, group);
+        }
+    }
+
+    private static boolean isCurrentPlayer(UUID senderUUID, String rawPlayerName, Text senderName) {
+        var local = localPlayerSupplier.get();
+        if (local == null) return false;
+        if (senderUUID != null && !senderUUID.equals(new UUID(0, 0)))
+            return senderUUID.equals(local.getUuid());
+        String account = local.getName().getString();
+        if (rawPlayerName != null && !rawPlayerName.isEmpty())
+            return rawPlayerName.equalsIgnoreCase(account);
+        return senderName != null && senderName.getString().equalsIgnoreCase(account);
+    }
+
+    private static ChatMessage withCurrentOwnership(ChatMessage message) {
+        if (message == null || localPlayerSupplier.get() == null) return message;
+        // Legacy rows without a UUID cannot always be reattributed. Preserve an
+        // existing own flag rather than moving them left on an uncertain guess.
+        if (message.isOwn() && !message.isSystem() && (message.senderUUID() == null
+                || message.senderUUID().equals(new UUID(0, 0)))
+                && !isCurrentPlayer(message.senderUUID(), message.rawPlayerName(), message.senderName()))
+            return message;
+        boolean own = !message.isSystem()
+            && isCurrentPlayer(message.senderUUID(), message.rawPlayerName(), message.senderName());
+        if (own == message.isOwn()) return message;
+        historyDirty = true;
+        return message.withOwn(own);
     }
 
     // Display names can't identify a sender reliably: the local echo bubble's name
@@ -987,7 +1019,8 @@ public class ChatMessageStore {
                 // Messages that arrived before the world key was known (MOTD, join
                 // notices) must stay newest — load saved history underneath them
                 // instead of appending it after
-                List<ChatMessage> early = new ArrayList<>(messages);
+                List<ChatMessage> early = new ArrayList<>(messages.size());
+                for (ChatMessage message : messages) early.add(withCurrentOwnership(message));
                 // The backlog can land before the world key is known, so its rows are
                 // the "early" ones here: hand their keys to the loader and it will not
                 // restore the same lines a second time underneath them.
@@ -1276,7 +1309,8 @@ public class ChatMessageStore {
         // A legacy file migrates to JSONL on the next save (memory is the source).
         if (head.trim().startsWith("[")) {
             List<ChatMessage> legacy = loadLegacyFile(f);
-            for (ChatMessage m : legacy) {
+            for (ChatMessage saved : legacy) {
+                ChatMessage m = withCurrentOwnership(saved);
                 if (BlockList.isBlocked(m)) continue;
                 if (!skipCounts.isEmpty() && !takeFresh(skipCounts, mergeKeyOf(m))) continue;
                 messages.add(m);
@@ -1290,7 +1324,7 @@ public class ChatMessageStore {
                 while ((line = br.readLine()) != null) {
                     if (line.isBlank()) continue;
                     try {
-                        ChatMessage m = fromLine(line);
+                        ChatMessage m = withCurrentOwnership(fromLine(line));
                         if (m == null || BlockList.isBlocked(m)) continue;
                         if (!skipCounts.isEmpty() && !takeFresh(skipCounts, mergeKeyOf(m))) continue;
                         messages.add(m);
@@ -1316,7 +1350,10 @@ public class ChatMessageStore {
         java.util.regex.Pattern.compile("§.");
 
     /**
-     * Identity of one chat line for merge purposes: sender + content + group. Time
+     * Identity of one chat line for merge purposes: sender UUID (or legacy name)
+     * + content + group. History display names may include server prefixes and
+     * nicknames while the live copy has a raw account name, so names alone do not
+     * reliably identify the same row. Time
      * is deliberately excluded - the server backlog is stamped with the server's
      * clock while our own list uses ours, so a time-based key would either miss a
      * real duplicate or swallow a distinct message. The whole text is compared
@@ -1324,10 +1361,12 @@ public class ChatMessageStore {
      * isSystem and whisper stay out of it on purpose: two lines a player reads
      * as the same words are the same words to them, whoever carried them.
      */
-    private static String mergeKey(String senderName, String content, String group) {
-        String name = senderName == null ? ""
-            : MERGE_NAME_COLOR.matcher(senderName).replaceAll("").trim().toLowerCase(Locale.ROOT);
-        return name + "\0" + (content == null ? "" : content)
+    private static String mergeKey(UUID senderUUID, String senderName, String content, String group) {
+        String identity = senderUUID != null && !senderUUID.equals(new UUID(0, 0))
+            ? "uuid:" + senderUUID
+            : "name:" + (senderName == null ? ""
+                : MERGE_NAME_COLOR.matcher(senderName).replaceAll("").trim().toLowerCase(Locale.ROOT));
+        return identity + "\0" + (content == null ? "" : content)
             + "\0" + (group == null ? "" : group);
     }
 
@@ -1335,7 +1374,7 @@ public class ChatMessageStore {
         String name = m.rawPlayerName() != null && !m.rawPlayerName().isEmpty()
             ? m.rawPlayerName()
             : (m.senderName() != null ? m.senderName().getString() : null);
-        return mergeKey(name, m.content().getString(), m.group());
+        return mergeKey(m.senderUUID(), name, m.content().getString(), m.group());
     }
 
     /**
@@ -1408,15 +1447,16 @@ public class ChatMessageStore {
             if (content.isBlank()) continue;
             if (BlockList.isPlayerBlocked(sender, Text.literal(sender),
                 ChatBubbleClientSetup.config().blockedPlayers())) continue;
-            String key = mergeKey(sender, content, e.group());
+            String key = mergeKey(e.senderUUID(), sender, content, e.group());
             if (!takeFresh(seen, key)) continue;
             backlogKeys.merge(key, 1, Integer::sum);
+            boolean own = !e.isSystem() && isCurrentPlayer(e.senderUUID(), sender, Text.literal(sender));
             fresh.add(new ChatMessage(
                 e.senderUUID() != null ? e.senderUUID() : new UUID(0, 0),
                 Text.literal(sender),
                 Text.literal(content),
                 e.time(),
-                false,
+                own,
                 e.isSystem(),
                 e.replyContent(),
                 e.replySender(),

@@ -325,7 +325,7 @@
   "e33chat.profile.title": "Player Profile",
   "e33chat.profile.self": "[You]",
   "e33chat.profile.online": "[Online]",
-  "e33chat.profile.offline": "[Offline]",
+  "e33chat.profile.unknown": "[Status unknown]",
   "e33chat.profile.uuid": "UUID",
   "e33chat.profile.latency": "Ping",
   "e33chat.profile.gamemode": "Mode",
