@@ -1,0 +1,1084 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f308.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🌈"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f31f.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🌟"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f32e.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🌮"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f354.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🍔"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f355.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🍕"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f369.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🍩"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f36a.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🍪"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f37a.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🍺"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f382.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🎂"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f389.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🎉"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f38a.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🎊"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f3a4.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🎤"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f3a7.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🎧"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f3a8.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🎨"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f3ae.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🎮"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f3af.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🎯"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f3b5.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🎵"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f3b6.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🎶"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f3bc.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🎼"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f419.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐙"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f41d.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐝"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f41e.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐞"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f420.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐠"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f424.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐤"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f427.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐧"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f428.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐨"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f42d.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐭"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f42e.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐮"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f42f.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐯"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f430.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐰"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f431.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐱"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f434.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐴"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f435.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐵"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f436.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐶"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f438.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐸"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f439.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐹"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f43b.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐻"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f43c.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🐼"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f440.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "👀"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f44b.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "👋"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f44d.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "👍"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f44e.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "👎"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f44f.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "👏"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f480.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💀"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f48c.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💌"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f494.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💔"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f495.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💕"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f496.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💖"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f497.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💗"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f498.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💘"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f499.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💙"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f49a.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💚"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f49b.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💛"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f49c.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💜"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f49d.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💝"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f49f.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💟"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f4a1.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💡"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f4a2.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💢"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f4a4.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💤"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f4a7.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💧"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f4aa.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💪"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f4ac.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💬"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f4ad.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💭"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f4af.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "💯"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f525.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🔥"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f5a4.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🖤"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f5ff.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🗿"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f600.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😀"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f601.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😁"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f602.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😂"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f603.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😃"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f604.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😄"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f605.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😅"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f606.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😆"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f607.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😇"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f609.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😉"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f60a.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😊"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f60b.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😋"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f60d.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😍"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f60e.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😎"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f610.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😐"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f618.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😘"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f61b.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😛"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f61c.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😜"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f621.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😡"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f622.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😢"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f624.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😤"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f62d.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😭"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f634.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😴"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f637.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "😷"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f642.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🙂"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f64c.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🙌"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f912.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🤒"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f914.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🤔"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f917.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🤗"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f91d.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🤝"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f921.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🤡"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f923.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🤣"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f929.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🤩"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f92a.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🤪"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f970.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🥰"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f97a.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🥺"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f980.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🦀"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f981.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🦁"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f984.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🦄"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f98a.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🦊"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f98b.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🦋"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/1f9e1.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "🧡"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/2615.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "☕"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/2705.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "✅"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/270c.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "✌"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/2744.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "❄"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/274c.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "❌"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/2753.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "❓"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/2757.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "❗"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/2763.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "❣"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/2764.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "❤"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/2b06.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "⬆"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/2b07.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "⬇"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "e33chat:emoji/2b50.png",
+      "ascent": 8,
+      "height": 10,
+      "chars": [
+        "⭐"
+      ]
+    }
+  ]
+}

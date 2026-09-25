@@ -1,0 +1,5 @@
+Emoji PNGs in this directory are from Google Noto Emoji, 2D/png/32,
+https://github.com/googlefonts/noto-emoji (retrieved 2026-09-23).
+The image resources are licensed under Apache License, Version 2.0.
+The complete license is included as APACHE-2.0.txt in this directory.
+The files retain their original Unicode-codepoint identifiers and were not modified.

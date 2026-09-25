@@ -1,0 +1,14 @@
+/Custom-Nameplates-main/
+/e33chat-2.4.14-forge/
+**/.gradle/
+**/build/
+**/run/
+**/logs/
+**/*.log
+**/.idea/
+**/.kotlin/
+**/.env
+**/.env.*
+**/*.pem
+**/*.p12
+**/*.keystore

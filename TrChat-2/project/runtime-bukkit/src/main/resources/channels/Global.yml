@@ -1,0 +1,33 @@
+Options:
+  Speak-Condition: 'perm "trchat.global"'
+  Proxy: true
+  Force-Proxy: false
+  Double-Transfer: true
+  Always-Listen: true
+
+Bindings:
+  Prefix: ['!all']
+  Command: ['global', 'all', 'shout']
+
+Formats:
+  - condition: null
+    prefix:
+      player:
+        text: '&e%trchat_displayname%&8: '
+    msg:
+      default-color: 'f'
+      special-char:
+        enabled: false
+        special-char-color: '&f'
+      hover: '&7Date: %server_time_HH:mm:ss%'
+
+# Can't use placeholders!
+Console:
+  - prefix:
+      server:
+        text: '&eServer&8: '
+    msg:
+      default-color: 'f'
+      special-char:
+        enabled: false
+        special-char-color: '&f'
