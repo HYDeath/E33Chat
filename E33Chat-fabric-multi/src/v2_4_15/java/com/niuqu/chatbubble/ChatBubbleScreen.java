@@ -2079,6 +2079,7 @@ public class ChatBubbleScreen extends ChatScreen {
     }
 
     private List<OrderedText> wrapContent(Text c, int width) {
+        c = ColorEmojiText.decorate(c);
         List<Text> paras = new ArrayList<>();
         MutableText[] cur = { Text.empty() };
         c.visit((style, text) -> {

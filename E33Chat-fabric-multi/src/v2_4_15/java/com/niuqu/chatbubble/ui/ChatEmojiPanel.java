@@ -108,6 +108,12 @@ public class ChatEmojiPanel {
         "⬆️","⬇️","✅","❌","❓","❗","💤","💡",
         "💀","🗿","🤡","👀","💯","💢","💬","💭",
     };
+    private static final java.util.Set<Integer> COLOR_CODEPOINTS = new java.util.HashSet<>();
+    static {
+        for (String emoji : EMOTES) COLOR_CODEPOINTS.add(emoji.codePointAt(0));
+    }
+
+    public static boolean supports(int codepoint) { return COLOR_CODEPOINTS.contains(codepoint); }
 
     private static final String[] KAO = {
         "(｡•̀ᴗ-)✧","(๑˃̵ᴗ˂̵)و","(๑•̀ㅂ•́)و✧","(◍•ᴗ•◍)",
@@ -320,7 +326,8 @@ public class ChatEmojiPanel {
             String emoji = EMOTES[i];
             g.drawText(font, emoji,
                 ex + SLOT / 2 - font.getWidth(emoji) / 2,
-                ey + (SLOT - font.fontHeight) / 2, com.niuqu.chatbubble.render.ChatBubbleTheme.alphaBlend(c.textPrimary(), a255), false);
+                ey + (SLOT - font.fontHeight) / 2,
+                com.niuqu.chatbubble.render.ChatBubbleTheme.alphaBlend(0xFFFFFFFF, a255), false);
         }
         g.disableScissor();
     }

@@ -1,7 +1,7 @@
 # E33Chat Fabric 2.4.15 for Minecraft 26.x
 
 This directory contains the 26.1.2, 26.2, and 26.3 Fabric ports of upstream
-Chat-Mod-E 2.4.15. The 26.x artifacts use version `2.4.15+compat.20`. Older
+Chat-Mod-E 2.4.15. The 26.x artifacts use version `2.4.15+compat.21`. Older
 Minecraft targets retain the existing 2.3.15 source and version.
 
 ## Source and scope
@@ -23,7 +23,7 @@ Minecraft targets retain the existing 2.3.15 source and version.
 The upstream 1.21.1 Fabric network protocol was adapted for 26.x. This is a
 Fabric port; it is not guaranteed to connect to the upstream Forge/NeoForge
 wire protocol or to older E33Chat mod-server builds. The optional TrChat
-plugin bridge retains this fork's own payload protocol. The `compat.20` client
+plugin bridge retains this fork's own payload protocol. The `compat.21` client
 decodes the plugin's older history and server-settings packets. Install
 TrChat `2.5.3+e33compat.14` for the updated settings-save packet. TrChat does
 not implement upstream E33 group chat; that feature requires the Fabric server mod.
@@ -38,12 +38,12 @@ Run each target separately to avoid configuring the older Minecraft projects:
 .\gradlew.bat '-De33.targetVersion=26.3-fabric' :26.3-fabric:build --offline
 ```
 
-Output: `versions/<target>/build/libs/e33chat-Fabric-26.X-2.4.15+compat.20.jar`.
+Output: `versions/<target>/build/libs/e33chat-Fabric-26.X-2.4.15+compat.21.jar`.
 The Gradle JVM must use Java 25. This multi-version build currently disables
 `compileTestJava` for version projects, so `build` verifies compilation,
 resources, and packaging, but does not run the upstream unit tests.
 
-`compat.20` restores the bundled color Emoji font, gives the local-image and
+`compat.21` restores the bundled color Emoji font, gives the local-image and
 CraftEngine tabs separate responsive labels, and uses a native image-only file
 picker. The 26.3 JAR bundles the file-picker library and its platform natives,
 which Minecraft 26.3 no longer supplies.
