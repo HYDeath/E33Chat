@@ -62,7 +62,8 @@ public class PlayerProfileScreen extends Screen {
 
     @Override
     public void render(DrawContext g, int mouseX, int mouseY, float partialTick) {
-        renderBackground(g, mouseX, mouseY, partialTick);
+        // Avoid a second vanilla background blur when opened from chat.
+        g.fill(0, 0, width, height, 0xA0000000);
         ChatBubbleTheme.Colors c = Appearance.snapshot();
 
         // Panel (SDF 圆角：阴影 + 底色，与气泡同画法)

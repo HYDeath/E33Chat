@@ -62,7 +62,9 @@ public class PlayerProfileScreen extends Screen {
 
     @Override
     public void extractRenderState(DrawContext g, int mouseX, int mouseY, float partialTick) {
-        renderBackground(g, mouseX, mouseY, partialTick);
+        // This screen may open after another GUI has queued the frame's blur.
+        // Vanilla permits only one blur pass, so draw a modal dimmer instead.
+        g.fill(0, 0, width, height, 0xA0000000);
         ChatBubbleTheme.Colors c = Appearance.snapshot();
 
         // Panel (SDF 圆角：阴影 + 底色，与气泡同画法)
