@@ -34,10 +34,13 @@ public final class NameplateBubbleScreen extends Screen {
     private static boolean available;
     private static boolean loading;
     private static boolean received;
+    private static boolean timedOut;
     private static String selected = "none";
     private static String selectedSkinSpec = "";
     private final Screen parent;
     private int scroll;
+    private long requestStartedAt;
+    private static final long REQUEST_TIMEOUT_MS = 5000;
 
     public NameplateBubbleScreen(Screen parent) {
         super(Text.literal("头顶气泡"));
@@ -49,6 +52,7 @@ public final class NameplateBubbleScreen extends Screen {
             catalogue.clear();
             selectedSkinSpec = "";
             received = true;
+            timedOut = false;
             available = page.available();
         }
         if (!received) return;
@@ -81,16 +85,20 @@ public final class NameplateBubbleScreen extends Screen {
         available = false;
         received = false;
         loading = false;
+        timedOut = false;
     }
 
     private void refresh() {
         catalogue.clear();
         selectedSkinSpec = "";
         received = false;
+        timedOut = false;
         loading = true;
+        requestStartedAt = System.currentTimeMillis();
         scroll = 0;
         if (!ClientPlayNetworking.canSend(BubbleActionPayload.ID)) {
             loading = false;
+            timedOut = true;
             return;
         }
         ClientPlayNetworking.send(new BubbleActionPayload(0, ""));
@@ -113,6 +121,10 @@ public final class NameplateBubbleScreen extends Screen {
 
     //#if MC >= 26000
     public void extractRenderState(DrawContext g, int mouseX, int mouseY, float tickDelta) {
+        if (loading && System.currentTimeMillis() - requestStartedAt >= REQUEST_TIMEOUT_MS) {
+            loading = false;
+            timedOut = true;
+        }
         RenderHelper.fill(g, 0, 0, width, height, 0xEE17191E);
         RenderHelper.drawText(g, textRenderer, title,
             width / 2 - textRenderer.getWidth(title) / 2, 14, 0xFFFFFFFF, false);
@@ -122,6 +134,10 @@ public final class NameplateBubbleScreen extends Screen {
         RenderHelper.fill(g, left() - 4, top() - 3, right() + 4, bottom() + 3, 0xBB24272F);
         if (!received && loading) {
             RenderHelper.drawText(g, textRenderer, "正在读取服务器气泡…", left() + 8, top() + 10, 0xFFFFFFFF, false);
+        } else if (timedOut) {
+            RenderHelper.drawText(g, textRenderer,
+                "服务器未返回气泡列表，请检查 TrChat 插件后重试",
+                left() + 8, top() + 10, 0xFFFFC38A, false);
         } else if (!available) {
             RenderHelper.drawText(g, textRenderer,
                 "当前服务器未启用 Custom-Nameplates 气泡", left() + 8, top() + 10, 0xFFBFC4CF, false);

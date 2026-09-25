@@ -129,7 +129,9 @@ public class PanelCropScreen extends Screen {
 
     @Override
     public void extractRenderState(DrawContext g, int mouseX, int mouseY, float partialTick) {
-        renderBackground(g, mouseX, mouseY, partialTick);
+        // The crop editor can open while another screen has already queued the
+        // 26.x blur pass. Minecraft permits only one blur per frame.
+        g.fill(0, 0, width, height, 0xF0191B22);
         ChatBubbleTheme.Colors c = Appearance.snapshot();
 
         Identifier tex = PanelBackground.textureId();

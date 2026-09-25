@@ -481,8 +481,6 @@ public class ChatBubbleConfigScreen extends Screen {
             OptionDef.intBox("e33chat.config.history_retention", Ref.i(() -> historyRetentionDays, v -> historyRetentionDays = v), 0, 365, 3),
             OptionDef.bool("e33chat.config.preserve_input", Ref.b(() -> preserveInput, v -> preserveInput = v)),
             OptionDef.bool("e33chat.config.close_chat_on_send", Ref.b(() -> closeChatOnSend, v -> closeChatOnSend = v))),
-        SectionDef.of("e33chat.config.section.upload",
-            OptionDef.text("e33chat.config.upload_url", Ref.s(() -> uploadUrl, v -> uploadUrl = v))),
         SectionDef.of("e33chat.config.section.debug",
             OptionDef.bool("e33chat.config.debug_log", Ref.b(() -> debugLog, v -> debugLog = v)),
             OptionDef.bool("e33chat.config.own_mention_notify", Ref.b(() -> ownMentionNotify, v -> ownMentionNotify = v)),

@@ -10,6 +10,7 @@ public final class BridgeIntegration {
     private static boolean ready;
     private static int retryTicks;
     private static boolean catalogRequested;
+    private static boolean emojiRequested;
 
     private BridgeIntegration() {}
 
@@ -34,6 +35,7 @@ public final class BridgeIntegration {
         ready = false;
         retryTicks = 0;
         catalogRequested = false;
+        emojiRequested = false;
         ChatLinks.clearOutgoing();
         NameplateBubbleScreen.clearCatalog();
         com.niuqu.chatbubble.ui.ChatEmojiPanel.setCraftEmojis("");
@@ -44,6 +46,7 @@ public final class BridgeIntegration {
         ready = false;
         retryTicks = 0;
         catalogRequested = false;
+        emojiRequested = false;
         ChatLinks.clearOutgoing();
         NameplateBubbleScreen.clearCatalog();
         com.niuqu.chatbubble.ui.ChatEmojiPanel.setCraftEmojis("");
@@ -57,6 +60,10 @@ public final class BridgeIntegration {
         if (!catalogRequested && ClientPlayNetworking.canSend(BubbleActionPayload.ID)) {
             catalogRequested = true;
             ClientPlayNetworking.send(new BubbleActionPayload(0, ""));
+        }
+        if (!emojiRequested && ClientPlayNetworking.canSend(CraftEmojiCatalogPayload.ID)) {
+            emojiRequested = true;
+            ClientPlayNetworking.send(new CraftEmojiCatalogPayload(""));
         }
     }
 

@@ -198,10 +198,6 @@ public class ServerConfigScreen extends Screen {
                     List.of(mkToggle(() -> useTpaV, nv -> useTpaV = nv)), null, "e33chat.server.use_tpa"));
                 rows.add(row(Text.translatable("e33chat.server.history"),
                     List.of(mkToggle(() -> historyV, nv -> historyV = nv)), null, "e33chat.server.history"));
-                rows.add(row(Text.translatable("e33chat.server.media_enabled"),
-                    List.of(mkToggle(() -> mediaV, nv -> mediaV = nv)), null, "e33chat.server.media_enabled"));
-                rows.add(row(Text.translatable("e33chat.server.media_auto_clean"),
-                    List.of(mkToggle(() -> autoCleanV, nv -> autoCleanV = nv)), null, "e33chat.server.media_auto_clean"));
                 rows.add(row(Text.translatable("e33chat.server.easybot_compat"),
                     List.of(mkToggle(() -> easyBotV, nv -> easyBotV = nv)), null, "e33chat.server.easybot_compat"));
                 rows.add(row(Text.translatable("e33chat.server.groups_enabled"),

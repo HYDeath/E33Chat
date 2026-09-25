@@ -6,6 +6,7 @@ import com.niuqu.chatbubble.network.ChatMetaPayload;
 import com.niuqu.chatbubble.network.ConfigSyncPayload;
 import com.niuqu.chatbubble.network.ConfigSyncV2Payload;
 import com.niuqu.chatbubble.network.ClientHelloPayload;
+import com.niuqu.chatbubble.network.CraftEmojiCatalogPayload;
 import com.niuqu.chatbubble.network.EasyBotConfigPayload;
 import com.niuqu.chatbubble.network.GroupActionPayload;
 import com.niuqu.chatbubble.network.GroupChatPayload;
@@ -14,7 +15,6 @@ import com.niuqu.chatbubble.network.HistoryPayload;
 import com.niuqu.chatbubble.network.MediaRequestPayload;
 import com.niuqu.chatbubble.network.MediaResponsePayload;
 import com.niuqu.chatbubble.network.MediaUploadAckPayload;
-import com.niuqu.chatbubble.network.MediaUploadPayload;
 import com.niuqu.chatbubble.network.MediaCapPayload;
 import com.niuqu.chatbubble.network.QuoteSyncPayload;
 import com.niuqu.chatbubble.network.ServerConfigSavePayload;
@@ -116,6 +116,7 @@ public class ChatBubbleMod implements ModInitializer {
             com.niuqu.chatbubble.network.BridgeHelloPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(com.niuqu.chatbubble.network.BubbleActionPayload.ID,
             com.niuqu.chatbubble.network.BubbleActionPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(CraftEmojiCatalogPayload.ID, CraftEmojiCatalogPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(com.niuqu.chatbubble.network.DownstreamPayload.ID,
             com.niuqu.chatbubble.network.DownstreamPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(QuoteSyncPayload.ID, QuoteSyncPayload.CODEC);
@@ -125,7 +126,6 @@ public class ChatBubbleMod implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(ConfigSyncV2Payload.ID, ConfigSyncV2Payload.CODEC);
         PayloadTypeRegistry.playS2C().register(ServerConfigScreenPayload.ID, ServerConfigScreenPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ServerConfigSavePayload.ID, ServerConfigSavePayload.CODEC);
-        PayloadTypeRegistry.playC2S().register(MediaUploadPayload.ID, MediaUploadPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(MediaRequestPayload.ID, MediaRequestPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(MediaUploadAckPayload.ID, MediaUploadAckPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(MediaResponsePayload.ID, MediaResponsePayload.CODEC);
@@ -138,14 +138,6 @@ public class ChatBubbleMod implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(GroupChatPayload.ID, GroupChatPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(GroupListPayload.ID, GroupListPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(GroupActionPayload.ID, GroupActionPayload.CODEC);
-
-        ServerPlayNetworking.registerGlobalReceiver(MediaUploadPayload.ID, (payload, context) -> {
-            ServerPlayerEntity player = context.player();
-            context.server().execute(() -> com.niuqu.chatbubble.server.MediaService.handleUpload(
-                player, mediaStore(context.server()), mediaEnabled, mediaAutoClean,
-                payload.uploadId(), payload.index(), payload.totalChunks(),
-                payload.totalBytes(), payload.contentType(), payload.chunk()));
-        });
 
         ServerPlayNetworking.registerGlobalReceiver(MediaRequestPayload.ID, (payload, context) -> {
             ServerPlayerEntity player = context.player();
@@ -319,7 +311,7 @@ public class ChatBubbleMod implements ModInitializer {
         useTpa = config.use_tpa;
         historyEnabled = config.history_enabled;
         templateDebug = config.template_debug;
-        mediaEnabled = config.media_enabled;
+        mediaEnabled = false;
         mediaAutoClean = config.media_auto_clean == null || config.media_auto_clean;
         easyBotCompat = config.easy_bot_compat == null || config.easy_bot_compat;
         groupsEnabled = config.groups_enabled == null || config.groups_enabled;
@@ -343,7 +335,7 @@ public class ChatBubbleMod implements ModInitializer {
             new ConfigSyncPayload(useTpa));
         ServerPlayNetworking.send(player, buildConfigV2());
         ServerPlayNetworking.send(player,
-            new MediaCapPayload(mediaEnabled));
+            new MediaCapPayload(false));
         ServerPlayNetworking.send(player,
             new EasyBotConfigPayload(easyBotCompat));
     }

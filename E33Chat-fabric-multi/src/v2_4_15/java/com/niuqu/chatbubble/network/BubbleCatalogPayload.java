@@ -30,19 +30,39 @@ public record BubbleCatalogPayload(boolean available, boolean first, boolean las
                 buf.writeString(entry.skinSpec);
             }
         },
-        buf -> {
-            boolean available = buf.readBoolean();
-            boolean first = buf.readBoolean();
-            boolean last = buf.readBoolean();
-            String selected = buf.readString(128);
-            int count = buf.readVarInt();
-            if (count < 0 || count > 64) throw new IllegalArgumentException("Invalid bubble catalogue page");
-            List<Entry> entries = new ArrayList<>(count);
-            for (int i = 0; i < count; i++)
-                entries.add(new Entry(buf.readString(128), buf.readString(256),
-                    buf.readString(4096), buf.readBoolean(), buf.readString(2048)));
-            return new BubbleCatalogPayload(available, first, last, selected, List.copyOf(entries));
-        });
+        BubbleCatalogPayload::decode);
+
+    private static BubbleCatalogPayload decode(PacketByteBuf buf) {
+        // TrChat e33compat.11 sent entries without skinSpec. Try the current
+        // format first, then restart at the same byte for that older server.
+        int start = buf.readerIndex();
+        try {
+            return decodePage(buf, true);
+        } catch (RuntimeException incompatible) {
+            buf.readerIndex(start);
+            return decodePage(buf, false);
+        }
+    }
+
+    private static BubbleCatalogPayload decodePage(PacketByteBuf buf, boolean withSkinSpec) {
+        boolean available = buf.readBoolean();
+        boolean first = buf.readBoolean();
+        boolean last = buf.readBoolean();
+        String selected = buf.readString(128);
+        int count = buf.readVarInt();
+        if (count < 0 || count > 64) throw new IllegalArgumentException("Invalid bubble catalogue page");
+        List<Entry> entries = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            String id = buf.readString(128);
+            String label = buf.readString(256);
+            String preview = buf.readString(4096);
+            boolean unlocked = buf.readBoolean();
+            String skinSpec = withSkinSpec ? buf.readString(2048) : "";
+            entries.add(new Entry(id, label, preview, unlocked, skinSpec));
+        }
+        if (buf.readableBytes() != 0) throw new IllegalArgumentException("Trailing bubble catalogue data");
+        return new BubbleCatalogPayload(available, first, last, selected, List.copyOf(entries));
+    }
 
     @Override public Id<BubbleCatalogPayload> getId() { return ID; }
 }

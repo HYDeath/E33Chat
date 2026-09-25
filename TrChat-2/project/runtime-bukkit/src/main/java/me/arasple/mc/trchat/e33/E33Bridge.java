@@ -30,10 +30,8 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.messaging.PluginMessageListener;
 import taboolib.expansion.SingleRedisConnection;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -73,7 +71,6 @@ public final class E33Bridge implements Listener, PluginMessageListener {
     private final Map<UUID, StagedChat> stagedChats = new ConcurrentHashMap<>();
     private final Map<UUID, UUID> privateIds = new ConcurrentHashMap<>();
     private final Map<UUID, E33Protocol.Quote> quotes = new ConcurrentHashMap<>();
-    private final Map<String, UploadState> uploads = new ConcurrentHashMap<>();
     private final Deque<E33Protocol.HistoryEntry> localHistory = new ArrayDeque<>();
     private volatile E33Protocol.Settings settings;
     private volatile boolean nameplatesOwnBubbles = true;
@@ -106,7 +103,7 @@ public final class E33Bridge implements Listener, PluginMessageListener {
     public static void enable(Plugin plugin) {
         E33Bridge bridge = new E33Bridge(plugin);
         instance = bridge;
-        for (String channel : List.of("quote_sync", "server_config_save", "media_upload", "media_request", "bridge_hello_v1", "emoji_catalog", "bubble_action"))
+        for (String channel : List.of("quote_sync", "server_config_save", "media_request", "bridge_hello_v1", "emoji_catalog", "bubble_action"))
             Bukkit.getMessenger().registerIncomingPluginChannel(plugin, PREFIX + channel, bridge);
         for (String channel : List.of("chat_meta", "chat_history", "config_sync", "config_sync_v2",
             "server_config_screen", "media_upload_ack", "media_response", "media_cap",
@@ -185,11 +182,11 @@ public final class E33Bridge implements Listener, PluginMessageListener {
             case PREFIX + "config_sync" -> send(player, "config_sync", E33Protocol.encode(out -> out.writeBoolean(settings.useTpa())));
             case PREFIX + "config_sync_v2" -> send(player, "config_sync_v2", E33Protocol.config(settings));
             case PREFIX + "chat_history" -> sendHistory(player);
-            case PREFIX + "media_cap" -> send(player, "media_cap", new byte[] {(byte) (settings.media() && redis() != null ? 1 : 0)});
+            case PREFIX + "media_cap" -> send(player, "media_cap", new byte[] {0});
             case PREFIX + "emoji_catalog" -> sendCraftEmojiCatalog(player, true);
             case E33DownstreamProtocol.CHANNEL -> {
                 send(player, "config_sync_v2", E33Protocol.config(settings));
-                send(player, "media_cap", new byte[] {(byte) (settings.media() && redis() != null ? 1 : 0)});
+                send(player, "media_cap", new byte[] {0});
                 sendHistory(player);
                 sendCraftEmojiCatalog(player, true);
             }
@@ -468,7 +465,6 @@ public final class E33Bridge implements Listener, PluginMessageListener {
         rawMessages.remove(id);
         originalLinks.remove(id);
         quotes.remove(id);
-        uploads.keySet().removeIf(key -> key.startsWith(id.toString() + ":"));
     }
 
     /** Called after TrChat's content processing, so history/meta never expose pre-filter text. */
@@ -1135,8 +1131,9 @@ public final class E33Bridge implements Listener, PluginMessageListener {
                         applySettings(next);
                     }, null);
                 }
-                case PREFIX + "media_upload" -> mediaUpload(player, E33Protocol.upload(data));
                 case PREFIX + "media_request" -> mediaRequest(player, E33Protocol.mediaRequest(data));
+                case PREFIX + "emoji_catalog" -> player.getScheduler().run(plugin,
+                    task -> sendCraftEmojiCatalog(player, true), null);
                 case PREFIX + "bubble_action" -> {
                     var input = E33Protocol.input(data);
                     int action = input.readUnsignedByte();
@@ -1184,7 +1181,7 @@ public final class E33Bridge implements Listener, PluginMessageListener {
         plugin.saveConfig();
         CompletableFuture.runAsync(() -> saveShared(next));
         sendAll("config_sync_v2", E33Protocol.config(next));
-        sendAll("media_cap", new byte[] {(byte) (next.media() && redis() != null ? 1 : 0)});
+        sendAll("media_cap", new byte[] {0});
     }
 
     private boolean command(CommandSender sender, String[] args) {
@@ -1215,65 +1212,6 @@ public final class E33Bridge implements Listener, PluginMessageListener {
         return true;
     }
 
-    private void mediaUpload(Player player, E33Protocol.Upload part) {
-        if (!settings.media() || redis() == null) {
-            send(player, "media_upload_ack", E33Protocol.ack(part.id(), "", "Shared media unavailable"));
-            return;
-        }
-        String key = player.getUniqueId() + ":" + part.id();
-        uploads.entrySet().removeIf(item -> System.currentTimeMillis() - item.getValue().createdAt > 60_000);
-        if (!uploads.containsKey(key) && uploads.size() >= 64) {
-            send(player, "media_upload_ack", E33Protocol.ack(part.id(), "", "Too many uploads"));
-            return;
-        }
-        UploadState state = uploads.computeIfAbsent(key, ignored -> new UploadState(part.chunks(), part.bytes()));
-        if (state.chunks.length != part.chunks() || state.total != part.bytes()) {
-            uploads.remove(key);
-            return;
-        }
-        synchronized (state) {
-            state.chunks[part.index()] = part.data();
-            if (!state.complete()) return;
-            uploads.remove(key);
-        }
-        CompletableFuture.runAsync(() -> {
-            try {
-                byte[] bytes = state.assemble();
-                if (!validImage(bytes, part.type())) throw new IOException("Unsupported media type");
-                UUID id = UUID.nameUUIDFromBytes(MessageDigest.getInstance("SHA-256").digest(bytes));
-                String mediaId = id.toString().replace("-", "");
-                SingleRedisConnection redis = redis();
-                String encoded = Base64.getEncoder().encodeToString(bytes);
-                Object stored = redis.eval("if redis.call('EXISTS', KEYS[1]) == 1 then "
-                        + "redis.call('EXPIRE', KEYS[1], 604800); return 1 end; "
-                        + "local total=0; for _,k in ipairs(redis.call('KEYS','e33chat:v1:media:*')) do "
-                        + "total=total+redis.call('STRLEN',k) end; "
-                        + "if total+string.len(ARGV[1]) > 715827882 then return 0 end; "
-                        + "redis.call('SETEX',KEYS[1],604800,ARGV[1]); return 1",
-                    List.of("e33chat:v1:media:" + mediaId), List.of(encoded));
-                if (!(stored instanceof Number) || ((Number) stored).longValue() != 1L)
-                    throw new IOException("Media quota exceeded");
-                send(player, "media_upload_ack", E33Protocol.ack(part.id(), mediaId, ""));
-            } catch (Exception ex) {
-                send(player, "media_upload_ack", E33Protocol.ack(part.id(), "", "Media storage failed"));
-            }
-        });
-    }
-
-    private static boolean validImage(byte[] bytes, String type) {
-        if (bytes.length == 0 || bytes.length > 8 * 1024 * 1024) return false;
-        return switch (type.toLowerCase(Locale.ROOT)) {
-            case "image/png" -> bytes.length >= 8 && bytes[0] == (byte) 0x89
-                && bytes[1] == 'P' && bytes[2] == 'N' && bytes[3] == 'G';
-            case "image/jpeg" -> bytes.length >= 3 && bytes[0] == (byte) 0xff
-                && bytes[1] == (byte) 0xd8 && bytes[2] == (byte) 0xff;
-            case "image/gif" -> bytes.length >= 6 && bytes[0] == 'G' && bytes[1] == 'I' && bytes[2] == 'F';
-            case "image/webp" -> bytes.length >= 12 && bytes[0] == 'R' && bytes[1] == 'I'
-                && bytes[2] == 'F' && bytes[3] == 'F' && bytes[8] == 'W' && bytes[9] == 'E';
-            default -> false;
-        };
-    }
-
     private void mediaRequest(Player player, String mediaId) {
         if (!mediaId.matches("[0-9a-f]{32}")) return;
         CompletableFuture.runAsync(() -> {
@@ -1294,20 +1232,4 @@ public final class E33Bridge implements Listener, PluginMessageListener {
         });
     }
 
-    private static final class UploadState {
-        final byte[][] chunks;
-        final int total;
-        final long createdAt = System.currentTimeMillis();
-        UploadState(int count, int total) { this.chunks = new byte[count][]; this.total = total; }
-        boolean complete() {
-            int bytes = 0;
-            for (byte[] chunk : chunks) { if (chunk == null) return false; bytes += chunk.length; }
-            return bytes == total;
-        }
-        byte[] assemble() throws IOException {
-            ByteArrayOutputStream out = new ByteArrayOutputStream(total);
-            for (byte[] chunk : chunks) out.write(chunk);
-            return out.toByteArray();
-        }
-    }
 }
