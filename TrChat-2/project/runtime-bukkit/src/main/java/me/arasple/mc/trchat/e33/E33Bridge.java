@@ -57,6 +57,7 @@ public final class E33Bridge implements Listener, PluginMessageListener {
 
     private final Plugin plugin;
     private final String serverId;
+    private final String senderFormat;
     private final String nodeId = UUID.randomUUID().toString();
     private final Map<UUID, Player> players = new ConcurrentHashMap<>();
     private final java.util.Set<String> modClients = ConcurrentHashMap.newKeySet();
@@ -82,6 +83,9 @@ public final class E33Bridge implements Listener, PluginMessageListener {
         // A backend port is an implementation detail, not a player-facing server
         // name. Operators can opt in to a label through e33.server-id.
         this.serverId = plugin.getConfig().getString("e33.server-id", "").trim();
+        String configuredFormat = plugin.getConfig().getString("e33.sender-format", "{display_name}");
+        this.senderFormat = configuredFormat == null || configuredFormat.isBlank() || configuredFormat.length() > 512
+            ? "{display_name}" : configuredFormat;
         this.settings = new E33Protocol.Settings(false, true, false,
             List.of("{prefix}{display_name}{sep}{content}"),
             List.of("[☬] [我 ➦ {target}] {content}",
@@ -298,6 +302,37 @@ public final class E33Bridge implements Listener, PluginMessageListener {
     }
 
     public static String serverId() { return instance == null ? "" : instance.serverId; }
+
+    /** Source backend's player-facing name, including PlaceholderAPI's server_name. */
+    public static String serverNameFor(Player player) {
+        E33Bridge bridge = instance;
+        if (bridge == null) return "";
+        String name = bridge.placeholder(player, "%server_name%");
+        return name.isBlank() ? bridge.serverId : name;
+    }
+
+    public static String titleFor(Player player) {
+        return instance == null || player == null ? "" : instance.playerTitle(player).trim();
+    }
+
+    private String placeholder(Player player, String key) {
+        if (player == null || !Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) return "";
+        try {
+            Class<?> papi = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
+            String value = (String) papi.getMethod("setPlaceholders", Player.class, String.class)
+                .invoke(null, player, key);
+            return value == null || value.isBlank() || value.equals(key) ? "" : value.trim();
+        } catch (ReflectiveOperationException | LinkageError ignored) {
+            return "";
+        }
+    }
+
+    private Component senderComponent(Player player) {
+        String display = styledDisplayName(player);
+        String formatted = E33SenderFormat.format(senderFormat, serverNameFor(player),
+            playerTitle(player), player.getName(), display);
+        return styledNameComponent(formatted.isBlank() ? display : formatted);
+    }
 
     public static boolean isClient(String account) {
         return instance != null && instance.modClients.contains(account.toLowerCase(Locale.ROOT));
@@ -516,8 +551,8 @@ public final class E33Bridge implements Listener, PluginMessageListener {
         try {
             E33Protocol.BridgeChat old = E33Protocol.bridgeChat(staged.bytes());
             Player player = Bukkit.getPlayer(sender);
-            String styled = player == null ? old.displayName() : bridge.styledDisplayName(player);
-            String displayJson = GsonComponentSerializer.gson().serialize(styledNameComponent(styled));
+            String displayJson = player == null ? old.displayJson()
+                : GsonComponentSerializer.gson().serialize(bridge.senderComponent(player));
             String renderedJson = GsonComponentSerializer.gson().serialize(
                 clickableLinks(clickableHiddenLinks(rendered, old.body())));
             E33Protocol.BridgeChat updated = new E33Protocol.BridgeChat(old.messageId(), old.sender(),
@@ -668,11 +703,13 @@ public final class E33Bridge implements Listener, PluginMessageListener {
         bodyJson = clickableBodyJson(bodyJson, raw);
         String nameplate = nameplateComponentJson(sender);
         if (nameplate.length() > 8192) nameplate = "";
+        String origin = serverNameFor(sender);
+        String senderJson = GsonComponentSerializer.gson().serialize(senderComponent(sender));
         try {
             byte[] bridgeChat = E33Protocol.bridgeChat(new E33Protocol.BridgeChat(UUID.randomUUID(),
-                sender.getUniqueId(), name, nickname, serverId, raw, bodyJson, false, "",
+                sender.getUniqueId(), name, nickname, origin, raw, bodyJson, false, "",
                 quote == null ? "" : quote.sender(), quote == null ? "" : quote.content(),
-                mentionIds, nameplate, "", ""));
+                mentionIds, nameplate, senderJson, ""));
             stagedChats.put(sender.getUniqueId(), new StagedChat(bridgeChat, System.currentTimeMillis()));
         } catch (IllegalArgumentException ex) {
             plugin.getLogger().warning("E33 semantic chat too large; using ordinary chat: " + ex.getMessage());
@@ -684,7 +721,7 @@ public final class E33Bridge implements Listener, PluginMessageListener {
             Base64.getEncoder().encodeToString(meta));
 
         E33Protocol.HistoryEntry entry = new E33Protocol.HistoryEntry(sender.getUniqueId(),
-            (serverId.isEmpty() ? "" : "[" + serverId + "] ") + nickname,
+            (origin.isEmpty() ? "" : "[" + origin + "] ") + nickname,
             raw, System.currentTimeMillis(), false,
             quote == null ? "" : quote.content(), quote == null ? "" : quote.sender());
         synchronized (localHistory) {
@@ -724,12 +761,13 @@ public final class E33Bridge implements Listener, PluginMessageListener {
         bodyJson = clickableBodyJson(bodyJson, raw);
         String nameplate = nameplateComponentJson(sender);
         if (nameplate.length() > 8192) nameplate = "";
+        String senderJson = GsonComponentSerializer.gson().serialize(senderComponent(sender));
         try {
             byte[] bridgeChat = E33Protocol.bridgeChat(new E33Protocol.BridgeChat(messageId,
-                senderId, account, source == null ? account : source.nickname(), serverId, raw,
+                senderId, account, source == null ? account : source.nickname(), serverNameFor(sender), raw,
                 bodyJson, true, event.getSession().getLastPrivateTo(),
                 quote == null ? "" : quote.sender(), quote == null ? "" : quote.content(),
-                List.of(), nameplate, "", ""));
+                List.of(), nameplate, senderJson, ""));
             stagedChats.put(senderId, new StagedChat(bridgeChat, System.currentTimeMillis()));
         } catch (IllegalArgumentException ex) {
             plugin.getLogger().warning("E33 semantic private chat too large: " + ex.getMessage());

@@ -12,6 +12,14 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 class E33ProtocolTest {
+    @Test void senderTemplateKeepsSourceServerTitleAndAccount() {
+        assertEquals("[创造服] 称号 HuYa_Death",
+            E33SenderFormat.format("[{server_name}] {title}{player_id}",
+                "创造服", "称号 ", "HuYa_Death", "聊天昵称"));
+        assertEquals("聊天昵称", E33SenderFormat.format("{display_name}",
+            "创造服", "称号 ", "HuYa_Death", "聊天昵称"));
+    }
+
     @Test void downstreamEnvelopeUsesOneChannelWithoutChangingInnerWireBytes() {
         byte[] raw = E33Protocol.ack(7L, "media", "");
         byte[] envelope = E33DownstreamProtocol.wrap("media_upload_ack", raw);

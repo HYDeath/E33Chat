@@ -14,6 +14,8 @@ public final class BridgeIntegration {
 
     private BridgeIntegration() {}
 
+    public static boolean isReady() { return ready; }
+
     public static void register() {
         ClientPlayNetworking.registerGlobalReceiver(DownstreamPayload.ID, (payload, context) -> {
             try {

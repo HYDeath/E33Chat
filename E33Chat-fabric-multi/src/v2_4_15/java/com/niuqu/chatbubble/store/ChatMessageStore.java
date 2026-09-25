@@ -49,6 +49,8 @@ public class ChatMessageStore {
             return size() > 2048;
         }
     };
+    private record LocalSend(String body, long time) {}
+    private static final Deque<LocalSend> pendingBridgeSends = new ArrayDeque<>();
 
     public static boolean isProjectingBridgeHud() { return projectingBridgeHud; }
     private static String pendingReplyContent;
@@ -134,6 +136,8 @@ public class ChatMessageStore {
     public static void clearSeenPlayers() {
         seenPlayers.clear();
         bridgeSeen.clear();
+        pendingBridgeSends.clear();
+        ownDecoratedName = null;
     }
 
     public static void rememberPlayer(UUID uuid, String profileName, String displayName) {
@@ -433,12 +437,15 @@ public class ChatMessageStore {
         content = com.niuqu.chatbubble.ChatLinks.restoreHiddenLinks(
             content, payload.body(), payload.bodyJson(), payload.renderedJson());
 
-        Text decorated = !payload.nameplate().isEmpty()
-            ? HistoryStore.componentFromJson(payload.nameplate()) : null;
-        if (decorated == null && !payload.displayJson().isEmpty())
-            decorated = HistoryStore.componentFromJson(payload.displayJson());
+        // A nameplate is the floating tag above the player, often with world and
+        // command decorations. The TrChat display name is what chat recipients see.
+        Text decorated = !payload.displayJson().isEmpty()
+            ? HistoryStore.componentFromJson(payload.displayJson()) : null;
+        if (decorated == null && !payload.nameplate().isEmpty())
+            decorated = HistoryStore.componentFromJson(payload.nameplate());
         if (decorated == null) decorated = Text.literal(payload.displayName());
-        if (!payload.privateMessage() && !payload.origin().isEmpty())
+        if (!payload.privateMessage() && !payload.origin().isEmpty()
+                && !decorated.getString().startsWith("[" + payload.origin() + "]"))
             decorated = Text.literal("[" + payload.origin() + "] ").append(decorated);
 
         var local = localPlayerSupplier.get();
@@ -450,8 +457,10 @@ public class ChatMessageStore {
             payload.quoteSender(), payload.quoteContent(), mentions);
         String partner = payload.privateMessage()
             ? (own ? payload.recipient() : payload.account()) : null;
-        addMessage(content, payload.sender(), decorated, false, payload.account(),
-            payload.privateMessage(), partner, own);
+        if (!own || !reconcileOwnBridgeMessage(payload, content, decorated)) {
+            addMessage(content, payload.sender(), decorated, false, payload.account(),
+                payload.privateMessage(), partner, false);
+        }
 
         Text hud = !payload.renderedJson().isEmpty()
             ? HistoryStore.componentFromJson(payload.renderedJson()) : null;
@@ -464,6 +473,42 @@ public class ChatMessageStore {
         }
     }
 
+    /** Replace the optimistic local bubble with the authoritative bridge copy.
+     *  This is one send and one acknowledgement, so anti-spam must not count it
+     *  as two sends. A real second local send still increments the count. */
+    private static boolean reconcileOwnBridgeMessage(
+            com.niuqu.chatbubble.network.BridgeChatV2Payload payload, Text content, Text decorated) {
+        long now = System.currentTimeMillis();
+        pendingBridgeSends.removeIf(send -> now - send.time() > 15_000);
+        LocalSend pending = null;
+        for (LocalSend send : pendingBridgeSends) {
+            if (send.body().equals(payload.body())) { pending = send; break; }
+        }
+        // TrChat filters may rewrite the outgoing body. With exactly one pending
+        // send there is still an unambiguous acknowledgement to reconcile.
+        if (pending == null && pendingBridgeSends.size() == 1)
+            pending = pendingBridgeSends.peekFirst();
+        if (pending == null) return false;
+        pendingBridgeSends.remove(pending);
+        for (int i = messages.size() - 1; i >= 0 && i >= messages.size() - 8; i--) {
+            ChatMessage last = messages.get(i);
+            if (!last.isOwn() || !payload.account().equalsIgnoreCase(last.rawPlayerName())
+                    || !last.content().getString().equals(pending.body())
+                    || now - last.time() > 15_000) continue;
+            String replyContent = payload.quoteContent().isEmpty() ? last.replyContent() : payload.quoteContent();
+            String replySender = payload.quoteSender().isEmpty() ? last.replySender() : payload.quoteSender();
+            messages.set(i, new ChatMessage(payload.sender(), decorated, content, last.time(),
+                true, false, replyContent, replySender,
+                String.valueOf(content.getString().hashCode()), last.duplicateCount(),
+                payload.account(), payload.privateMessage(), last.whisperPartner(), last.group()));
+            EchoTracker.removePendingMeta(String.valueOf(content.getString().hashCode()));
+            cacheOwnDecoratedName(decorated);
+            historyDirty = true;
+            return true;
+        }
+        return false;
+    }
+
     public static void addMessage(Text content, UUID senderUUID, Text senderName, boolean isSystem, String rawPlayerName, boolean whisper, String whisperPartner, boolean localSend, String group) {
         String messageHash = String.valueOf(content.getString().hashCode());
 
@@ -472,6 +517,13 @@ public class ChatMessageStore {
         // Real newlines are kept in the stored content so the chat list renders them as
         // line breaks; single-line contexts (preview/hint) flatten them separately.
         if (content.getString().isBlank()) return;
+
+        if (localSend && !whisper) {
+            long now = System.currentTimeMillis();
+            pendingBridgeSends.removeIf(send -> now - send.time() > 15_000);
+            pendingBridgeSends.addLast(new LocalSend(content.getString(), now));
+            while (pendingBridgeSends.size() > 32) pendingBridgeSends.removeFirst();
+        }
 
         var localPlayer = localPlayerSupplier.get();
         String playerName = localPlayer != null ? localPlayer.getName().getString() : "";
@@ -859,6 +911,8 @@ public class ChatMessageStore {
     // team color is the only blue-name source there.
     public static Text ownDisplayName() {
         var player = net.minecraft.client.MinecraftClient.getInstance().player;
+        if (com.niuqu.chatbubble.BridgeIntegration.isReady() && ownDecoratedName != null)
+            return ownDecoratedName;
         if (player != null && player.networkHandler != null) {
             var info = player.networkHandler.getPlayerListEntry(player.getUuid());
             if (info != null && info.getDisplayName() != null) {

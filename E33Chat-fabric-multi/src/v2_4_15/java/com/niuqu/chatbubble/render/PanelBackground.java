@@ -34,6 +34,11 @@ public final class PanelBackground {
     private static boolean failed;
     private static boolean warnedPath;
     private static int texW, texH;
+    private static final int MAX_TEXTURE_EDGE = 2048;
+    private static String cachedCropRaw;
+    private static Crop cachedCrop = Crop.DEFAULT;
+    private static int cachedSourceW, cachedSourceH, cachedTargetW, cachedTargetH;
+    private static int[] cachedSourceRect;
 
     private PanelBackground() {}
 
@@ -97,12 +102,26 @@ public final class PanelBackground {
             try (FileInputStream in = new FileInputStream(file)) {
                 img = NativeImage.read(in);
                 if (img.getWidth() <= 0 || img.getHeight() <= 0) throw new IllegalStateException("empty image");
+                // Crop coordinates are normalized, so scaling here preserves the
+                // user's framing while keeping GPU upload and redraw inexpensive.
+                int largest = Math.max(img.getWidth(), img.getHeight());
+                if (largest > MAX_TEXTURE_EDGE) {
+                    float scale = (float) MAX_TEXTURE_EDGE / largest;
+                    int width = Math.max(1, Math.round(img.getWidth() * scale));
+                    int height = Math.max(1, Math.round(img.getHeight() * scale));
+                    NativeImage scaled = new NativeImage(NativeImage.Format.RGBA, width, height, false);
+                    try { img.resizeSubRectTo(0, 0, img.getWidth(), img.getHeight(), scaled); }
+                    catch (Throwable t) { scaled.close(); throw t; }
+                    img.close();
+                    img = scaled;
+                }
                 final NativeImage decoded = img;
                 img = null;
                 MinecraftClient.getInstance().execute(() -> apply(forKey, decoded));
             } catch (Throwable t) {
                 if (img != null) img.close();
                 synchronized (LOCK) {
+                    if (!forKey.equals(loadedKey)) return;
                     failed = true;
                     if (!warnedPath) {
                         warnedPath = true;
@@ -144,6 +163,7 @@ public final class PanelBackground {
         registered = false;
         texW = 0;
         texH = 0;
+        cachedSourceRect = null;
     }
 
     /** Relative paths resolve against the game directory, absolute pass through. */
@@ -267,7 +287,21 @@ public final class PanelBackground {
                             int x, int y, int w, int h, float alpha) {
         if (w > 0 && h > 0) lastAspect = (float) w / h;
         if (!available() || w <= 0 || h <= 0 || alpha <= 0.003f) return;
-        int[] src = sourceRect(texW, texH, w, h, parseCrop(ChatBubbleClientSetup.config().panelBgCrop()));
+        String cropRaw = ChatBubbleClientSetup.config().panelBgCrop();
+        if (!java.util.Objects.equals(cropRaw, cachedCropRaw)) {
+            cachedCropRaw = cropRaw;
+            cachedCrop = parseCrop(cropRaw);
+            cachedSourceRect = null;
+        }
+        if (cachedSourceRect == null || cachedSourceW != texW || cachedSourceH != texH
+                || cachedTargetW != w || cachedTargetH != h) {
+            cachedSourceW = texW;
+            cachedSourceH = texH;
+            cachedTargetW = w;
+            cachedTargetH = h;
+            cachedSourceRect = sourceRect(texW, texH, w, h, cachedCrop);
+        }
+        int[] src = cachedSourceRect;
         com.niuqu.chatbubble.texture.ColoredTextureRenderer.drawWithAlpha(
             g, ID, x, y, w, h, src[0], src[1], src[2], src[3], texW, texH, alpha);
     }

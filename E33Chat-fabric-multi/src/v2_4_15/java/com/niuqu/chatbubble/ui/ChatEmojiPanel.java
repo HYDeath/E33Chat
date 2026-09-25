@@ -21,6 +21,8 @@ public class ChatEmojiPanel {
     private record CraftEmoji(String keyword, Text preview) {}
     private static volatile java.util.List<CraftEmoji> craftEmojis = java.util.List.of();
 
+    public static boolean hasCraftEmojis() { return !craftEmojis.isEmpty(); }
+
     public static void setCraftEmojis(String encoded) {
         if (encoded == null || encoded.isEmpty()) {
             craftEmojis = java.util.List.of();
@@ -120,6 +122,7 @@ public class ChatEmojiPanel {
             TextRenderer font, ChatBubbleTheme.Colors c,
             int panelX, int panelW, int barTop, int iconS, int pad, float alpha) {
         if (!visible) return;
+        if (tab == 2 && !hasCraftEmojis()) { tab = 0; scroll = 0; }
         int a255 = (int) (255 * alpha);
         int sendX = panelX + panelW - pad - iconS + 2;
 
@@ -133,14 +136,16 @@ public class ChatEmojiPanel {
 
         java.util.List<String> tabLabels = new java.util.ArrayList<>(java.util.List.of(
             Text.translatable("e33chat.emoji.tab_emoji").getString(),
-            Text.translatable("e33chat.emoji.tab_kaomoji").getString(),
-            Text.translatable("e33chat.emoji.tab_craft").getString()
+            Text.translatable("e33chat.emoji.tab_kaomoji").getString()
         ));
         java.util.List<String> shortLabels = new java.util.ArrayList<>(java.util.List.of(
             Text.translatable("e33chat.emoji.tab_emoji_short").getString(),
-            Text.translatable("e33chat.emoji.tab_kaomoji_short").getString(),
-            Text.translatable("e33chat.emoji.tab_craft_short").getString()
+            Text.translatable("e33chat.emoji.tab_kaomoji_short").getString()
         ));
+        if (hasCraftEmojis()) {
+            tabLabels.add(Text.translatable("e33chat.emoji.tab_craft").getString());
+            shortLabels.add(Text.translatable("e33chat.emoji.tab_craft_short").getString());
+        }
         com.niuqu.chatbubble.texture.ColoredTextureRenderer.drawWithAlpha(g,
             com.niuqu.chatbubble.texture.UiTextureManager.rl(com.niuqu.chatbubble.texture.UiElement.TITLE_BAR),
             px, py, pw, TAB_H + 1, alpha);
@@ -281,6 +286,7 @@ public class ChatEmojiPanel {
             TextRenderer font, ChatBubbleTheme.Colors c,
             int panelX, int panelW, int barTop, int iconS, int pad) {
         if (!visible) return null;
+        if (tab == 2 && !hasCraftEmojis()) { tab = 0; scroll = 0; }
         int sendX = panelX + panelW - pad - iconS + 2;
 
         int iconY = barTop + (ChatBubbleScreen.BAR_H - iconS) / 2;
@@ -304,7 +310,7 @@ public class ChatEmojiPanel {
         }
 
         if (my < py + TAB_H) {
-            int tabCount = 3;
+            int tabCount = hasCraftEmojis() ? 3 : 2;
             int t = Math.min(tabCount - 1, (mx - px) * tabCount / pw);
             if (t >= 0 && t < tabCount) { tab = t; scroll = 0; }
             return "";
@@ -340,6 +346,7 @@ public class ChatEmojiPanel {
      *  and scroll math derived from a hardcoded width never reached the
      *  bottom of the list on narrow panels. */
     public void handleScroll(double scrollY, int panelW) {
+        if (tab == 2 && !hasCraftEmojis()) { tab = 0; scroll = 0; }
         boolean isKaomoji = tab == 1;
         boolean isCraft = tab == 2;
         int totalH;

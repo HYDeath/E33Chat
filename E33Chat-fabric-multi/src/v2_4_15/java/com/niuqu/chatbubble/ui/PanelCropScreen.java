@@ -57,27 +57,27 @@ public class PanelCropScreen extends Screen {
     protected void init() {
         // The decode+upload is asynchronous and only the chat panel used to kick
         // it off, so opening this screen straight from the settings screen left
-        // it showing nothing at all. Start it here, and if it is still in flight
-        // the render pass keeps re-running init (cheap) until the size is known.
+        // it showing nothing at all. Start it here; tick updates layout once loaded.
         PanelBackground.ensureLoaded(imagePath);
-        lastKnownSize = PanelBackground.imageWidth() * 10000 + PanelBackground.imageHeight();
+        lastKnownWidth = PanelBackground.imageWidth();
+        lastKnownHeight = PanelBackground.imageHeight();
         layout();
     }
 
-    private int lastKnownSize = -1;
+    private int lastKnownWidth = -1;
+    private int lastKnownHeight = -1;
 
     @Override
     public void tick() {
         // Wait for the picture: without this the screen stays blank forever when
         // it was opened before the first frame ever drew the chat panel.
         if (PanelBackground.available()) {
-            int now = PanelBackground.imageWidth() * 10000 + PanelBackground.imageHeight();
-            if (now != lastKnownSize) {
-                lastKnownSize = now;
-                // yarn Screen has no rebuildWidgets(); re-running init() is the
-                // equivalent, and this screen builds no widgets of its own.
-                clearChildren();
-                init();
+            int width = PanelBackground.imageWidth();
+            int height = PanelBackground.imageHeight();
+            if (width != lastKnownWidth || height != lastKnownHeight) {
+                lastKnownWidth = width;
+                lastKnownHeight = height;
+                layout();
             }
         }
         super.tick();

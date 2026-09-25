@@ -49,7 +49,10 @@ object HookPlaceholderAPI : PlaceholderExpansion {
                 "toplayer" -> session.lastPrivateTo
                 "todisplayname" -> E33Bridge.styledNameFor(session.lastPrivateTo)
                 "displayname" -> E33Bridge.styledNameFor(player.name)
-                "server", "originserver" -> E33Bridge.serverId()
+                "server" -> if (params.getOrNull(1)?.equals("name", true) == true) E33Bridge.serverNameFor(player) else E33Bridge.serverId()
+                "originserver" -> E33Bridge.serverNameFor(player)
+                "title" -> E33Bridge.titleFor(player)
+                "player" -> if (params.getOrNull(1)?.equals("id", true) == true) player.name else "out of case"
                 "spy" -> data.isSpying
                 "filter" -> data.isFilterEnabled
                 "mute" -> data.isMuted
