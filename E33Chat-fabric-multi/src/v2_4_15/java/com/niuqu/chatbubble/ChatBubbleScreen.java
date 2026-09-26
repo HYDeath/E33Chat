@@ -69,6 +69,8 @@ public class ChatBubbleScreen extends ChatScreen {
     private static final int BUBBLE_PAD_X = UiTokens.BUBBLE_PAD_X;
     private static final int BUBBLE_PAD_Y = UiTokens.BUBBLE_PAD_Y;
     private static final int NAME_H = 10;
+    private static final int LINK_CARD_W = 220;
+    private static final int LINK_CARD_H = 54;
     private static final int TIME_SEP_H = 14;
     public static final int BAR_H = 26;
     private static final int SIDEBAR_W = 90;
@@ -1189,10 +1191,10 @@ public class ChatBubbleScreen extends ChatScreen {
                 if (click.getAction() == ClickEvent.Action.OPEN_URL) {
                     // Local file:// links (e.g. legacy chatimage messages) are not
                     // browser URLs; opening them throws URISyntaxException. Only
-                    // hand http(s) to the vanilla handler.
+                    // open valid http(s) targets through the trusted-domain policy.
                     String clickUrl = com.niuqu.chatbubble.UiCompat.clickValue(click);
                     if (clickUrl != null && (clickUrl.startsWith("http://") || clickUrl.startsWith("https://"))) {
-                        defaultHandleGameClickEvent(style.getClickEvent(), minecraft, this);
+                        openWebLink(clickUrl);
                     }
                     return true;
                 }
@@ -1892,6 +1894,8 @@ public class ChatBubbleScreen extends ChatScreen {
                 int zW = 0;
                 for (var zl : wrapContent(msg.content(), Appearance.bubbleWrapWidth(zMaxW, textRenderer.fontHeight)))
                     zW = Math.max(zW, textRenderer.getWidth(zl));
+                if (ChatLinks.firstCardUrl(msg.content()) != null)
+                    zW = Math.max(zW, Math.min(LINK_CARD_W, Math.max(1, (int) (zMaxW / bs))));
                 int zBubbleW = (int)((zW + BUBBLE_PAD_X * 2) * bs);
                 int zBubbleX = msg.isOwn()
                     ? panelX + panelW - PAD - Appearance.avatarSize() - 4 - zBubbleW
@@ -1952,7 +1956,7 @@ public class ChatBubbleScreen extends ChatScreen {
     }
 
     private List<OrderedText> wrapContent(Text c, int width) {
-        c = ColorEmojiText.decorate(c);
+        c = ColorEmojiText.decorate(ChatLinks.linkify(c));
         List<Text> paras = new ArrayList<>();
         MutableText[] cur = { Text.empty() };
         c.visit((style, text) -> {
@@ -2059,7 +2063,7 @@ public class ChatBubbleScreen extends ChatScreen {
             } else if (click.getAction() == ClickEvent.Action.OPEN_URL) {
                 String clickUrl = com.niuqu.chatbubble.UiCompat.clickValue(click);
                 if (clickUrl != null && (clickUrl.startsWith("http://") || clickUrl.startsWith("https://"))) {
-                    defaultHandleGameClickEvent(style.getClickEvent(), minecraft, this);
+                    openWebLink(clickUrl);
                 }
             } else {
                 defaultHandleGameClickEvent(style.getClickEvent(), minecraft, this);
@@ -2069,6 +2073,31 @@ public class ChatBubbleScreen extends ChatScreen {
 
     private boolean isPanelSliding() {
         return ChatBubbleClientSetup.config().animationEnabled() && getAnimProgress() < 1.0f;
+    }
+
+    private void openWebLink(String url) {
+        String target = ChatLinks.normalizeWebUrl(url);
+        if (!ChatLinks.isWebUrl(target)) return;
+        if (ChatLinks.isTrustedDirectUrl(target)) {
+            launchWebLink(target);
+            return;
+        }
+        minecraft.setScreen(new net.minecraft.client.gui.screens.ConfirmScreen(confirmed -> {
+            minecraft.setScreen(this);
+            if (confirmed) launchWebLink(target);
+        }, Text.literal("打开外部链接？"), Text.literal(target)));
+    }
+
+    private void launchWebLink(String url) {
+        try {
+            //#if MC >= 260300
+            //$$ com.mojang.blaze3d.Blaze3D.openUri(java.net.URI.create(url));
+            //#else
+            Util.getOperatingSystem().open(java.net.URI.create(url));
+            //#endif
+        } catch (Exception ex) {
+            com.mojang.logging.LogUtils.getLogger().warn("[e33chat] Cannot open web link: {}", ex.toString());
+        }
     }
 
     private int currentPanelOffset() {
@@ -2097,9 +2126,11 @@ public class ChatBubbleScreen extends ChatScreen {
         Integer cached = msgHeightCache.get(msg);
         if (cached != null) return cached;
         int h;
+        String cardUrl = ChatLinks.firstCardUrl(msg.content());
         if (msg.isSystem()) {
             List<OrderedText> lines = wrapContent(msg.content(), panelW - PAD * 2 - 20);
             h = lines.size() * textRenderer.fontHeight + 4;
+            if (cardUrl != null) h += LINK_CARD_H + 3;
         } else {
             int bubbleMaxW = panelW - Appearance.avatarSize() - PAD * 2 - BUBBLE_PAD_X * 2 - 16;
             BracketCodec.ParseResult parsed = parseImages(msg);
@@ -2116,11 +2147,12 @@ public class ChatBubbleScreen extends ChatScreen {
                 int imgH = 0;
                 for (var ref : parsed.images()) imgH += imageEdgeHeight(ref.url(), ref.name()) + 2;
                 h = NAME_H + textH + imgH;
+                if (cardUrl != null) h += LINK_CARD_H + 3;
                 if (msg.replyContent() != null) h += textRenderer.fontHeight + 7;
                 msgHeightCache.put(msg, h);
                 return h;
             }
-            if (msg.isOwn() && msg.replyContent() == null && NameplateBubbleScreen.hasSelectedSkin()) {
+            if (cardUrl == null && msg.isOwn() && msg.replyContent() == null && NameplateBubbleScreen.hasSelectedSkin()) {
                 List<OrderedText> frameLines = wrapContent(parsed.textWithoutImages(), Math.max(16, bubbleMaxW - 24));
                 NameplateBubbleSkin frameSkin = NameplateBubbleScreen.selectedSkin(frameLines.size());
                 int textW = 0;
@@ -2135,6 +2167,7 @@ public class ChatBubbleScreen extends ChatScreen {
             float s = Appearance.bubbleScale(textRenderer.fontHeight);
             List<OrderedText> lines = wrapContent(parsed.textWithoutImages(), Appearance.bubbleWrapWidth(bubbleMaxW, textRenderer.fontHeight));
             double contentH = lines.size() * textRenderer.fontHeight + BUBBLE_PAD_Y * 2;
+            if (cardUrl != null) contentH += LINK_CARD_H + 3;
             if (msg.replyContent() != null) contentH += textRenderer.fontHeight + 7;
             h = NAME_H + (int) (contentH * s);
         }
@@ -2220,12 +2253,18 @@ public class ChatBubbleScreen extends ChatScreen {
                     index, li, TextSpan.KIND_CONTENT, 1f, c().panelBg(), textSelection);
                 yy += textRenderer.fontHeight;
             }
+            String cardUrl = ChatLinks.firstCardUrl(msg.content());
+            if (cardUrl != null) {
+                int cardW = Math.min(LINK_CARD_W, panelW - PAD * 2 - 20);
+                renderLinkCard(g, cardUrl, panelX + (panelW - cardW) / 2, yy + 2, cardW, 1f, alpha);
+            }
             return;
         }
 
         boolean own = msg.isOwn();
         int bubbleMaxW = panelW - Appearance.avatarSize() - PAD * 2 - BUBBLE_PAD_X * 2 - 16;
         BracketCodec.ParseResult parsed = parseImages(msg);
+        String cardUrl = ChatLinks.firstCardUrl(msg.content());
 
         // E33Emote-only messages render bubble-less: max 64px, aligned by direction (QQ style).
         if (!parsed.images().isEmpty()
@@ -2246,7 +2285,7 @@ public class ChatBubbleScreen extends ChatScreen {
 
         // Bubble path only: re-wrap at the scaled width so bigger bubbles fit fewer
         // characters per line (bubble-less emote/image paths above keep the unscaled lines).
-        boolean skinEligible = own && msg.replyContent() == null && NameplateBubbleScreen.hasSelectedSkin();
+        boolean skinEligible = cardUrl == null && own && msg.replyContent() == null && NameplateBubbleScreen.hasSelectedSkin();
         float s = skinEligible ? 1f : Appearance.bubbleScale(textRenderer.fontHeight);
         lines = wrapContent(parsed.textWithoutImages(), skinEligible
             ? Math.max(16, bubbleMaxW - 24)
@@ -2262,8 +2301,10 @@ public class ChatBubbleScreen extends ChatScreen {
             textW = 0;
             for (var line : lines) textW = Math.max(textW, textRenderer.getWidth(line));
         }
-        int bubbleW = (int) ((textW + BUBBLE_PAD_X * 2) * s);
-        int bubbleH = (int) ((lines.size() * textRenderer.fontHeight + BUBBLE_PAD_Y * 2) * s);
+        int cardW = cardUrl == null ? 0 : Math.min(LINK_CARD_W, Math.max(1, (int) (bubbleMaxW / s)));
+        int bubbleW = (int) ((Math.max(textW, cardW) + BUBBLE_PAD_X * 2) * s);
+        int bubbleH = (int) ((lines.size() * textRenderer.fontHeight + BUBBLE_PAD_Y * 2
+            + (cardUrl == null ? 0 : LINK_CARD_H + 3)) * s);
         if (customFrame) {
             bubbleW = textRenderer.getWidth(frame);
             bubbleH = frameSkin.height();
@@ -2362,6 +2403,11 @@ public class ChatBubbleScreen extends ChatScreen {
             }
         }
 
+        if (cardUrl != null) {
+            int cardY = bubbleY + (int) ((BUBBLE_PAD_Y + lines.size() * textRenderer.fontHeight + 2) * s);
+            renderLinkCard(g, cardUrl, bubbleX + (int) (BUBBLE_PAD_X * s), cardY, cardW, s, alpha);
+        }
+
         String skinName = (msg.rawPlayerName() != null && !msg.rawPlayerName().isEmpty())
             ? msg.rawPlayerName() : msg.senderName().getString();
         Identifier skin = com.niuqu.chatbubble.render.SkinResolver.getSkin(msg.senderUUID(), skinName);
@@ -2417,6 +2463,43 @@ public class ChatBubbleScreen extends ChatScreen {
 
         if (index == searchHighlightIndex)
             g.drawBorder(bubbleX - 1, bubbleY - 1, bubbleW + 2, bubbleH + 2, ChatSearchPanel.HIGHLIGHT);
+    }
+
+    /** A fallback card stays visible while metadata and the cover load asynchronously. */
+    private void renderLinkCard(DrawContext g, String url, int x, int y, int w, float scale, float alpha) {
+        ChatLinks.Preview preview = ChatLinks.preview(url);
+        if (preview == null || w <= 0) return;
+        int h = LINK_CARD_H;
+        g.getMatrices().push();
+        g.getMatrices().translate(x, y, 0);
+        g.getMatrices().scale(scale, scale, 1f);
+        RoundRectRenderer.fill(g, 0, 0, w, h, 5,
+            ChatBubbleTheme.alphaBlend(0xFF141B2C, (int) (255 * alpha)));
+        int thumbW = Math.min(72, Math.max(24, w / 3));
+        int thumbH = h - 8;
+        g.fill(4, 4, 4 + thumbW, 4 + thumbH,
+            ChatBubbleTheme.alphaBlend(preview.site().equals("B站") ? 0xFFE45A8D : 0xFF358DCE,
+                (int) (255 * alpha)));
+        ImageEntry cover = preview.imageUrl().isEmpty() ? null : ImageLoader.getOrLoad(preview.imageUrl());
+        if (cover != null && cover.state() == ImageEntry.State.LOADED && cover.textureId() != null) {
+            g.drawTexture(cover.textureId(), 4, 4, thumbW, thumbH,
+                0, 0, cover.width(), cover.height(), cover.width(), cover.height());
+        } else {
+            g.drawText(textRenderer, preview.site().equals("B站") ? "▶" : "官网", 9, 23,
+                ChatBubbleTheme.alphaBlend(0xFFFFFFFF, (int) (255 * alpha)), false);
+        }
+        int tx = thumbW + 10;
+        int textW = Math.max(1, w - tx - 4);
+        g.drawText(textRenderer, textRenderer.trimToWidth(preview.title(), textW), tx, 5,
+            ChatBubbleTheme.alphaBlend(0xFFFFFFFF, (int) (255 * alpha)), false);
+        g.drawText(textRenderer, textRenderer.trimToWidth(preview.author(), textW), tx, 17,
+            ChatBubbleTheme.alphaBlend(0xFFB5BFD0, (int) (255 * alpha)), false);
+        g.drawText(textRenderer, textRenderer.trimToWidth(ChatLinks.displayLabel(url), textW), tx, h - 13,
+            ChatBubbleTheme.alphaBlend(0xFFFF719B, (int) (255 * alpha)), false);
+        g.getMatrices().pop();
+        clickableSpans.add(new ClickableSpan(x, y, Math.max(1, (int) (w * scale)),
+            Math.max(1, (int) (h * scale)), Style.EMPTY.withClickEvent(ChatLinks.openEvent(url))
+                .withHoverEvent(new net.minecraft.network.chat.HoverEvent.ShowText(Text.literal("点击打开：" + url)))));
     }
 
     /** Bubble-less image message: name + avatar + optional text + images
@@ -2516,6 +2599,15 @@ public class ChatBubbleScreen extends ChatScreen {
                 .withHoverEvent(new net.minecraft.network.chat.HoverEvent.ShowText(Text.literal(ref.url())));
             clickableSpans.add(new ClickableSpan(imgX, y, w, h, st));
             y += h + 2;
+        }
+
+        String cardUrl = ChatLinks.firstCardUrl(msg.content());
+        if (cardUrl != null) {
+            int cardW = Math.min(LINK_CARD_W, maxImgW);
+            int cardX = own ? avatarX - UiTokens.AVATAR_NAME_GAP - cardW
+                : avatarX + Appearance.avatarSize() + UiTokens.AVATAR_GAP;
+            renderLinkCard(g, cardUrl, cardX, y + 2, cardW, 1f, alpha);
+            y += LINK_CARD_H + 3;
         }
 
         if (msg.duplicateCount() > 1) {
