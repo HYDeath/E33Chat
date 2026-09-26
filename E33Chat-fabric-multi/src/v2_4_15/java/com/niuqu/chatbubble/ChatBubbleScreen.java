@@ -1192,11 +1192,11 @@ public class ChatBubbleScreen extends ChatScreen {
                     // hand http(s) to the vanilla handler.
                     String clickUrl = com.niuqu.chatbubble.UiCompat.clickValue(click);
                     if (clickUrl != null && (clickUrl.startsWith("http://") || clickUrl.startsWith("https://"))) {
-                        defaultHandleClickEvent(style.getClickEvent(), minecraft, this);
+                        defaultHandleGameClickEvent(style.getClickEvent(), minecraft, this);
                     }
                     return true;
                 }
-                defaultHandleClickEvent(style.getClickEvent(), minecraft, this); return true;
+                defaultHandleGameClickEvent(style.getClickEvent(), minecraft, this); return true;
             }
         }
 
@@ -2059,10 +2059,10 @@ public class ChatBubbleScreen extends ChatScreen {
             } else if (click.getAction() == ClickEvent.Action.OPEN_URL) {
                 String clickUrl = com.niuqu.chatbubble.UiCompat.clickValue(click);
                 if (clickUrl != null && (clickUrl.startsWith("http://") || clickUrl.startsWith("https://"))) {
-                    defaultHandleClickEvent(style.getClickEvent(), minecraft, this);
+                    defaultHandleGameClickEvent(style.getClickEvent(), minecraft, this);
                 }
             } else {
-                defaultHandleClickEvent(style.getClickEvent(), minecraft, this);
+                defaultHandleGameClickEvent(style.getClickEvent(), minecraft, this);
             }
         }
     }

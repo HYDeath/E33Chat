@@ -8,3 +8,5 @@ alwaysApply: true
 For work in this E33Chat workspace, use the nested Git repository at `E:\开发项目\瑶光\E233chat` with `origin` set to `https://github.com/HYDeath/E33Chat.git`. The user has authorized committing and pushing each completed update without asking again, including in future conversations.
 
 Keep Fabric source in `E33Chat-fabric-multi/` and TrChat source in `TrChat-2/`. After verifying a change, stage only relevant project files, inspect the staged diff for build outputs and secrets, commit, and push to `origin/main`. Never stage unrelated projects from the parent directory. Copy requested 26.x build artifacts to `E:\开发项目\瑶光\CSGO专属\构建` when a build is part of the task.
+
+Build only the components and Minecraft targets affected by the update: Fabric changes require Fabric builds, TrChat changes require plugin builds, and changes to both require both. Do not rebuild an unchanged plugin or Minecraft target.

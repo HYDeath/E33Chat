@@ -521,8 +521,9 @@ abstract class PreprocessTask extends DefaultTask {
         line = line.replaceAll("\\bgetAction\\b", "action")
         // 26.x: RegistryOps.of → RegistryOps.create
         line = line.replaceAll("RegistryOps\\.of\\(", "RegistryOps.create(")
-        // 26.x: Screen.handleClickEvent → defaultHandleClickEvent
-        line = line.replaceAll("\\bhandleClickEvent\\b", "defaultHandleClickEvent")
+        // The in-game handler also dispatches RunCommand, ShowDialog and Custom.
+        // defaultHandleClickEvent only handles URLs/files/suggestions/clipboard.
+        line = line.replaceAll("\\bhandleClickEvent\\b", "defaultHandleGameClickEvent")
         // 26.x: ChatScreen.setChatFromHistory → moveInHistory
         line = line.replaceAll("\\bsetChatFromHistory\\b", "moveInHistory")
         // 26.x: Screen.onFilesDropped → onFilesDrop (no trailing 'd')
