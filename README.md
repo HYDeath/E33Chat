@@ -2,3 +2,4 @@
 
 - [`E33Chat-fabric-multi/`](E33Chat-fabric-multi/)：E33Chat Fabric 多版本源码；Minecraft 26.1.2、26.2、26.3 的 2.4.15 移植见 [`COMPATIBILITY_26_3.md`](E33Chat-fabric-multi/COMPATIBILITY_26_3.md)。
 - [`TrChat-2/`](TrChat-2/)：配套的 TrChat/Paper 插件源码，独立文件夹。
+- [`TrChat-2/neoforge-1.21.1/`](TrChat-2/neoforge-1.21.1/)：NeoForge 1.21.1 服务端聊天模组，通过 Redis 与 Paper TrChat 互通；支持私聊、物品展示、固定群聊频道、屏蔽和管理。

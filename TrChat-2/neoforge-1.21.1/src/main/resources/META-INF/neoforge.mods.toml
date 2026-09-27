@@ -1,0 +1,21 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+[[mods]]
+modId="trchat"
+version="${version}"
+displayName="TrChat NeoForge"
+authors="Arasple, ItsFlicker, HYDeath"
+description='''Server chat, Redis cross-server messaging, groups and moderation for NeoForge 1.21.1.'''
+[[dependencies.trchat]]
+modId="neoforge"
+type="required"
+versionRange="[21.1,21.2)"
+ordering="NONE"
+side="BOTH"
+[[dependencies.trchat]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1]"
+ordering="NONE"
+side="BOTH"

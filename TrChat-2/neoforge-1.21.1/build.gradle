@@ -1,0 +1,44 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.141'
+}
+group = 'me.arasple.mc.trchat'
+version = mod_version
+base { archivesName = 'TrChat-NeoForge-1.21.1' }
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+    withSourcesJar()
+}
+repositories { mavenCentral() }
+neoForge {
+    version = neo_version
+    runs {
+        server { server(); programArgument '--nogui' }
+    }
+    mods { trchat { sourceSet sourceSets.main } }
+    unitTest {
+        enable()
+        testedMod = mods.trchat
+    }
+}
+// Share the tested wire codecs, without importing the Bukkit runtime.
+sourceSets.main.java {
+    srcDir '../project/runtime-bukkit/src/main/java'
+    include 'me/arasple/mc/trchat/neoforge/**'
+    include 'me/arasple/mc/trchat/e33/E33Protocol.java'
+    include 'me/arasple/mc/trchat/e33/E33DownstreamProtocol.java'
+}
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testImplementation 'org.mockito:mockito-core:5.11.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('META-INF/neoforge.mods.toml') { expand version: project.version }
+}
+test { useJUnitPlatform() }
+tasks.named('jar') {
+    from('../LICENSE') { into 'META-INF'; rename { 'LICENSE-TrChat' } }
+}

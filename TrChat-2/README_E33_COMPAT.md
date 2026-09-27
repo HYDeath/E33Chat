@@ -1,5 +1,7 @@
 # TrChat + E33Chat Fabric 2.4.15 compatibility build
 
+NeoForge 1.21.1 modded backends can use the separate server mod in [`neoforge-1.21.1/`](neoforge-1.21.1/README.md). It shares this build's Redis public/private chat protocol; its group channels and per-player mutes are NeoForge-only. The instructions below describe the Bukkit Jar.
+
 This branch produces a single Bukkit `TrChat` Jar targeting Java 21 bytecode. Install it on each Paper/Folia backend; do not install a server-side E33 Fabric/Forge mod or a Velocity companion. E33Chat Fabric 2.4.15 clients use `e33chat:*` plugin messaging; unmodded clients receive ordinary TrChat chat. Forge's `e33chat:main` protocol is not supported.
 
 ## Setup
