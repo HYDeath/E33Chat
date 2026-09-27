@@ -4,6 +4,7 @@ import com.mojang.authlib.GameProfile;
 import java.nio.file.*;
 import java.util.*;
 import net.minecraft.SharedConstants;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -138,5 +139,55 @@ class ChatServiceTest {
         chat.remote(WireMessage.decode("{\"data\":[\"GlobalMute\",\"off\"]}"));
         chat.privateChat(sender, "Alex", "allowed");
         verify(receiver).sendSystemMessage(argThat(c -> c.getString().contains("allowed")));
+    }
+    @Test void noNicknameAndBlankDisplayUseLoginNameWithoutExternalVariables() {
+        when(sender.getDisplayName()).thenReturn(Component.literal("  "));
+        when(receiver.getDisplayName()).thenReturn(null);
+        assertEquals("Steve", PlayerNames.plain(sender));
+        assertEquals("Alex", PlayerNames.plain(receiver));
+        assertEquals("Steve", chat.players().stream().filter(p -> p.uuid().equals(sender.getUUID())).findFirst().orElseThrow().display());
+        chat.globalChat(sender, "你好");
+        verify(receiver).sendSystemMessage(argThat(c -> c.getString().equals("[模组服] Steve: 你好")));
+        clearInvocations(sender, receiver);
+        chat.privateChat(sender, "Alex", "私信");
+        verify(receiver).sendSystemMessage(argThat(c -> c.getString().equals("[模组服] [Steve ➥ 我] 私信")));
+        verify(sender).sendSystemMessage(argThat(c -> c.getString().equals("[我 ➦ Alex] 私信")));
+    }
+    private static boolean hasStyledName(Component component, String name, ChatFormatting color) {
+        return component.toFlatList().stream().anyMatch(part -> part.getString().equals(name)
+            && net.minecraft.network.chat.TextColor.fromLegacyFormat(color).equals(part.getStyle().getColor()));
+    }
+    @Test void nicknameStyleSurvivesPublicPrivateAndGroupDelivery() {
+        Component nativeName = Component.literal("[勇者] 阿明").withStyle(ChatFormatting.GOLD);
+        when(sender.getDisplayName()).thenReturn(nativeName);
+        when(receiver.getDisplayName()).thenReturn(Component.literal("小张").withStyle(ChatFormatting.GREEN));
+        chat.globalChat(sender, "公开消息");
+        verify(receiver).sendSystemMessage(argThat(c -> hasStyledName(c, "[勇者] 阿明", ChatFormatting.GOLD)));
+        clearInvocations(sender, receiver);
+        chat.privateChat(sender, "小张", "私聊消息");
+        verify(receiver).sendSystemMessage(argThat(c -> hasStyledName(c, "[勇者] 阿明", ChatFormatting.GOLD)));
+        verify(sender).sendSystemMessage(argThat(c -> hasStyledName(c, "小张", ChatFormatting.GREEN)));
+        clearInvocations(sender, receiver);
+        chat.groupJoin(sender, "team"); chat.groupJoin(receiver, "team"); clearInvocations(sender, receiver);
+        chat.groupChat(sender, "team", "群聊消息");
+        verify(receiver).sendSystemMessage(argThat(c -> hasStyledName(c, "[勇者] 阿明", ChatFormatting.GOLD)));
+        assertEquals("[勇者] 阿明", nativeName.getString());
+        assertEquals(ChatFormatting.GOLD.getColor().intValue(), nativeName.getStyle().getColor().getValue());
+    }
+    @Test void asciiNicknameIgnoreStillBlocksTheCorrectAccount() {
+        when(sender.getDisplayName()).thenReturn(Component.literal("Hero"));
+        chat.ignore(receiver, "Hero"); clearInvocations(sender, receiver);
+        chat.globalChat(sender, "已屏蔽的账号消息");
+        verify(receiver, never()).sendSystemMessage(any(Component.class));
+        chat.ignore(receiver, "Steve"); clearInvocations(sender, receiver);
+        chat.globalChat(sender, "恢复显示");
+        verify(receiver).sendSystemMessage(argThat(c -> c.getString().contains("Hero: 恢复显示")));
+    }
+    @Test void semanticBridgeSeparatesNicknameFromStableAccountIdentity() {
+        when(sender.getDisplayName()).thenReturn(Component.literal("阿明").withStyle(ChatFormatting.AQUA));
+        chat.globalChat(sender, "跨服昵称消息");
+        network.verify(() -> E33Network.chat(eq(receiver), argThat(message -> message.account().equals("Steve")
+            && message.displayName().equals("阿明") && message.origin().equals("模组服")
+            && message.displayJson().contains("aqua"))));
     }
 }

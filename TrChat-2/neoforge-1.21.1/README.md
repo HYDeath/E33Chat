@@ -1,10 +1,10 @@
 # TrChat NeoForge 1.21.1
 
-服务端聊天模组，版本 `2.5.3+neo.1`。用于 Minecraft **1.21.1 / NeoForge 21.1.x / Java 21**，独立构建，不依赖 Bukkit、TabooLib 或运行时下载库。编译目标为 NeoForge **21.1.252**。客户端无需安装这个服务端模组，照常使用服务器要求的模组包即可。
+服务端聊天模组，版本 `2.5.3+neo.2`。用于 Minecraft **1.21.1 / NeoForge 21.1.x / Java 21**，独立构建，不依赖 Bukkit、TabooLib、PlaceholderAPI 或运行时下载库。编译目标为 NeoForge **21.1.252**。客户端无需安装这个服务端模组，照常使用服务器要求的模组包即可。
 
 ## 安装与跨服
 
-1. 将 `TrChat-NeoForge-1.21.1-2.5.3+neo.1.jar` 放进模组服的 `mods/`。Paper/Folia 服务器继续使用本仓库的 Bukkit TrChat JAR。
+1. 将 `TrChat-NeoForge-1.21.1-2.5.3+neo.2.jar` 放进模组服的 `mods/`，更新时替换旧版本，目录中只保留一个 TrChat 模组 JAR。Paper/Folia 服务器继续使用本仓库的 Bukkit TrChat JAR。
 2. 首次正常启动后生成 `config/trchat-neoforge.json`。设置 `serverName` 为玩家看到的名称，`directoryId` 为网络内唯一的数字；它不能与其他 NeoForge 节点或 Paper 后端的端口数字重复。
 3. 跨服时将 NeoForge 配置的 `redis.enabled` 改为 `true`，填写 Redis 连接信息。Paper 的 TrChat `settings.yml` 中同样启用 `Redis.enabled`，并使用相同 Redis 与发布频道 `trchat-message`。Paper 可保持 `Options.Proxy: AUTO` 或指定 `REDIS`。
 4. 执行 `/trchat reload` 重载 NeoForge 配置。Paper 根据其现有流程重载或重启。Velocity/Bungee 只需承担玩家连接；此版本的聊天互通走 Redis，**不使用代理插件消息桥**。
@@ -38,7 +38,18 @@
 }
 ```
 
-`publicFormat` 支持 `{server}`、`{display}`、`{player}`、`{message}`，其中显示名取 NeoForge 玩家显示组件。`blockedWords` 按不区分大小写的字面包含关系过滤。Redis 支持密码、ACL 用户名、数据库与 TLS；启用 TLS 时校验证书和主机名。跨服网络须使用同一频道；Redis 数据库不隔离发布订阅。
+`publicFormat` 的四个字段由模组自身直接填充，**不需要 PAPI 或任何变量扩展**：
+
+- `{server}`：直接读取配置中的 `serverName`，例如 `模组生存服`，无需 `%server_name%`。
+- `{display}`：读取 NeoForge 原生 `player.getDisplayName()`。没有昵称模组或队伍前后缀时，正常显示玩家登录账号名；有服务端昵称/称号模组时，沿用其原生显示名与颜色。空显示名回退到账号名。
+- `{player}`：读取玩家登录档案 `player.getGameProfile().getName()`，始终使用真实账号名，不受昵称影响。
+- `{message}`：当前聊天正文。
+
+例如账号 `Steve`、服务器名 `模组生存服`，默认格式显示 `[模组生存服] Steve: 你好`。需要始终显示真实账号时，将 `publicFormat` 改为 `[{server}] {player}: {message}`。不需要为每个玩家手填名字，也不需要根据 UUID 联网查询名字。公开聊天、私聊、群聊、玩家目录与 E33 数据使用一致的原生名称来源；私聊目标、屏蔽和回复记录仍用账号定位，避免昵称改变后发错人。私聊与群聊同样保留本服原生显示名的颜色。
+
+NeoForge 1.21.1 的 [官方玩家补丁](https://github.com/neoforged/NeoForge/blob/1.21.1/patches/net/minecraft/world/entity/player/Player.java.patch) 和 [NameFormat 事件](https://github.com/neoforged/NeoForge/blob/1.21.1/src/main/java/net/neoforged/neoforge/event/entity/player/PlayerEvent.java) 实现了上述原生昵称、队伍前后缀处理。只在客户端修改头顶标签的模组，不一定向服务端提供聊天显示名。请勿将 Bukkit 的 `%player_name%`、`%cmi_user_display_name%` 等 PAPI 表达式填入 NeoForge 配置；这里无需这些插件依赖。E33 模板里的 `{display_name}` 等字段属于 E33 客户端自带模板字段，也不依赖 PAPI。
+
+`blockedWords` 按不区分大小写的字面包含关系过滤。Redis 支持密码、ACL 用户名、数据库与 TLS；启用 TLS 时校验证书和主机名。跨服网络须使用同一频道；Redis 数据库不隔离发布订阅。
 
 ## 功能与命令
 
