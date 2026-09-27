@@ -190,4 +190,107 @@ class ChatServiceTest {
             && message.displayName().equals("阿明") && message.origin().equals("模组服")
             && message.displayJson().contains("aqua"))));
     }
+    @Test void paperMentionNotifiesOnlyRecipientAndIgnoreSuppressesNotification() throws Exception {
+        var packet = WireMessage.decode(WireMessage.encode("paper-node", "BroadcastRaw", UUID.randomUUID().toString(),
+            "{\"text\":\"hello @Alex\"}", "", "true", "", "hello @Alex", "RemoteSteve", "Alex", ""));
+        chat.remote(packet);
+        verify(receiver).sendSystemMessage(argThat(c -> c.getString().contains("提到了你")), eq(true));
+        verify(sender, never()).sendSystemMessage(any(Component.class), eq(true));
+        chat.ignore(receiver, "RemoteSteve"); clearInvocations(receiver);
+        chat.remote(WireMessage.decode(WireMessage.encode("paper-node", packet.data())));
+        verify(receiver, never()).sendSystemMessage(any(Component.class), anyBoolean());
+    }
+    @Test void mentionHighlightUsesCanonicalPrivateTargetAndPreservesUrlQuery() {
+        when(receiver.getDisplayName()).thenReturn(Component.literal("小张"));
+        chat.globalChat(sender, "@小张 @AlexExtra https://example.com/?a=1&b=2");
+        var captured = org.mockito.ArgumentCaptor.forClass(Component.class);
+        verify(receiver).sendSystemMessage(captured.capture());
+        String json = Component.Serializer.toJson(captured.getValue(), server.registryAccess());
+        assertTrue(json.contains("/msg Alex "));
+        assertTrue(json.contains("?a=1&b=2"));
+        network.verify(() -> E33Network.chat(eq(receiver), argThat(c -> c.mentions().equals(List.of(receiver.getUUID())))));
+    }
+    @Test void groupMentionsNotifyOnlyJoinedUnblockedMembers() {
+        chat.groupJoin(sender, "team"); chat.groupJoin(receiver, "team"); clearInvocations(sender, receiver, outsider);
+        chat.groupChat(sender, "team", "@Alex @Bob");
+        verify(receiver).sendSystemMessage(any(Component.class), eq(true));
+        verify(outsider, never()).sendSystemMessage(any(Component.class), anyBoolean());
+        chat.ignore(receiver, "Steve"); clearInvocations(receiver);
+        chat.groupChat(sender, "team", "@Alex");
+        verify(receiver, never()).sendSystemMessage(any(Component.class), anyBoolean());
+    }
+    @Test void e33RecipientOwnsMentionNotificationWithoutDuplicateNativeDelivery() {
+        network.when(() -> E33Network.chat(eq(receiver), any())).thenReturn(true);
+        chat.globalChat(sender, "@Alex");
+        verify(receiver, never()).sendSystemMessage(any(Component.class));
+        verify(receiver, never()).sendSystemMessage(any(Component.class), anyBoolean());
+    }
+    @Test void twoServiceNodesDeliverPrivateReplyMentionsAndRejectionsOverTcp() throws Exception {
+        chat.close();
+        try (var stub = new RedisBridgeTest.RedisStub(0)) {
+            var tasksA = new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
+            var tasksB = new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
+            doAnswer(c -> { tasksA.add(c.getArgument(0)); return null; }).when(server).execute(any(Runnable.class));
+            when(server.getPlayerList().getPlayers()).thenReturn(List.of(sender));
+            MinecraftServer serverB = mock(MinecraftServer.class);
+            PlayerList listB = mock(PlayerList.class);
+            when(serverB.getPlayerList()).thenReturn(listB);
+            when(listB.getPlayers()).thenReturn(List.of(receiver, outsider));
+            when(listB.getPlayer(any())).thenAnswer(c -> List.of(receiver, outsider).stream().filter(p -> p.getUUID().equals(c.getArgument(0))).findFirst().orElse(null));
+            when(serverB.getWorldPath(any())).thenReturn(temporary.resolve("world-b"));
+            var registries = server.registryAccess();
+            when(serverB.registryAccess()).thenReturn(registries);
+            doAnswer(c -> { tasksB.add(c.getArgument(0)); return null; }).when(serverB).execute(any(Runnable.class));
+            var config = new ChatConfig(); config.redis = RedisBridgeTest.config(stub.listener.getLocalPort());
+            config.cooldownMillis = 0; config.blockRepeatedMessages = false; config.directoryId = 25571;
+            Path a = temporary.resolve("config/a.json"), b = temporary.resolve("config/b.json");
+            Files.writeString(a, ChatConfig.JSON.toJson(config));
+            config.directoryId = 25572; Files.writeString(b, ChatConfig.JSON.toJson(config));
+            chat = new ChatService(server, a);
+            try (var second = new ChatService(serverB, b)) {
+                stub.values.put("e33chat:v1:reply:" + sender.getUUID(), "Alex");
+                Runnable pump = () -> {
+                    Runnable task; while ((task = tasksA.poll()) != null) task.run();
+                    while ((task = tasksB.poll()) != null) task.run(); chat.tick(); second.tick();
+                };
+                RedisBridgeTest.await(() -> { pump.run(); return chat.names().contains("Alex") && second.names().contains("Steve"); });
+                RedisBridgeTest.await(() -> { pump.run(); try { return Files.readString(temporary.resolve("world/trchat/state.json")).contains("Alex"); }
+                    catch (java.io.IOException e) { return false; } });
+                chat.join(sender); second.join(receiver); chat.quit(sender); second.quit(receiver);
+                chat.join(sender); second.join(receiver);
+                clearInvocations(sender, receiver, outsider);
+                chat.reply(sender, "tcp-secret");
+                verify(sender, never()).sendSystemMessage(argThat(c -> c.getString().contains("tcp-secret")));
+                RedisBridgeTest.await(() -> { pump.run(); return mockingDetails(sender).getInvocations().stream()
+                    .anyMatch(i -> i.getMethod().getName().equals("sendSystemMessage") && ((Component)i.getArgument(0)).getString().contains("tcp-secret")); });
+                verify(receiver).sendSystemMessage(argThat(c -> c.getString().contains("tcp-secret") && c.toFlatList().stream()
+                    .anyMatch(p -> p.getStyle().getColor() != null && p.getStyle().getColor().getValue() == 0x8AE7B7)));
+                verify(sender).sendSystemMessage(argThat(c -> c.getString().contains("tcp-secret")));
+                verify(outsider, never()).sendSystemMessage(any(Component.class));
+                clearInvocations(sender, receiver);
+                second.reply(receiver, "tcp-reply");
+                RedisBridgeTest.await(() -> { pump.run(); return stub.values.containsKey("e33chat:v1:reply:" + receiver.getUUID()); });
+                // The old reply key already exists; wait for delivery rather than accepting the stale key.
+                RedisBridgeTest.await(() -> { pump.run(); return mockingDetails(sender).getInvocations().stream()
+                    .anyMatch(i -> i.getMethod().getName().equals("sendSystemMessage") && ((Component)i.getArgument(0)).getString().contains("tcp-reply")); });
+                verify(sender).sendSystemMessage(argThat(c -> c.getString().contains("tcp-reply")));
+                second.ignore(receiver, "Steve"); clearInvocations(sender, receiver);
+                chat.privateChat(sender, "Alex", "blocked-tcp");
+                RedisBridgeTest.await(() -> { pump.run(); return mockingDetails(sender).getInvocations().stream()
+                    .anyMatch(i -> i.getMethod().getName().equals("sendSystemMessage") && ((Component)i.getArgument(0)).getString().contains("不接收私聊")); });
+                verify(receiver, never()).sendSystemMessage(any(Component.class));
+                verify(sender, never()).sendSystemMessage(argThat(c -> c.getString().contains("blocked-tcp")));
+                second.ignore(receiver, "Steve"); clearInvocations(sender, receiver, outsider);
+                chat.globalChat(sender, "跨服 @aLeX!");
+                RedisBridgeTest.await(() -> { pump.run(); return mockingDetails(receiver).getInvocations().stream()
+                    .anyMatch(i -> i.getMethod().getName().equals("sendSystemMessage") && i.getArguments().length == 2 && Boolean.TRUE.equals(i.getArgument(1))); });
+                verify(receiver).sendSystemMessage(argThat(c -> c.getString().contains("提到了你")), eq(true));
+                verify(outsider, never()).sendSystemMessage(any(Component.class), eq(true));
+                assertTrue(stub.received.stream().filter(c -> c.getFirst().equals("PUBLISH")).map(c -> WireMessage.decode(c.get(2)).data())
+                    .anyMatch(d -> d[0].equals("BroadcastRaw") && d.length > 8 && d[8].equals("Alex")));
+                assertFalse(stub.received.stream().filter(c -> c.getFirst().equals("PUBLISH"))
+                    .map(c -> WireMessage.decode(c.get(2))).anyMatch(m -> Arrays.stream(m.data()).anyMatch(s -> s.contains("加入了") || s.contains("离开了"))));
+            }
+        }
+    }
 }

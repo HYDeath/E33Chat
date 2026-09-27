@@ -12,12 +12,13 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.LevelResource;
 
 final class ChatService implements AutoCloseable {
     private static final String HISTORY_KEY = "e33chat:v1:history";
-    private static final Pattern TOKENS = Pattern.compile("\\{(server|display|player|message)\\}");
     private static final Pattern LINKS = Pattern.compile("https?://[^\\s<>\"']+", Pattern.CASE_INSENSITIVE);
     private final MinecraftServer server;
     private final Path configPath, statePath;
@@ -77,7 +78,7 @@ final class ChatService implements AutoCloseable {
         try { state.save(statePath); }
         catch (IOException ex) { TrChatMod.LOGGER.error("Could not save TrChat player state", ex); }
     }
-    private static void notice(ServerPlayer player, String text) { player.sendSystemMessage(Component.literal(text)); }
+    private static void notice(ServerPlayer player, String text) { player.sendSystemMessage(ChatText.parse(text)); }
     private ServerPlayer local(String account) {
         return server.getPlayerList().getPlayers().stream().filter(p -> PlayerNames.account(p).equalsIgnoreCase(account)).findFirst().orElse(null);
     }
@@ -89,6 +90,12 @@ final class ChatService implements AutoCloseable {
         return new ArrayList<>(merged.values());
     }
     List<String> names() { return players().stream().map(PlayerDirectory.Entry::account).distinct().sorted().toList(); }
+    List<String> privateNames() {
+        var players = players();
+        return java.util.stream.Stream.concat(players.stream().map(PlayerDirectory.Entry::account),
+            players.stream().map(PlayerDirectory.Entry::display).filter(n -> players.stream().filter(p -> p.display().equalsIgnoreCase(n)).count() == 1))
+            .distinct().sorted().map(n -> n.matches("[A-Za-z0-9_.+-]+") ? n : "\"" + n.replace("\\", "\\\\").replace("\"", "\\\"") + "\"").toList();
+    }
     List<String> groups() { return config.groups; }
     private PlayerDirectory.Entry resolve(String input) {
         var exact = players().stream().filter(p -> p.account().equalsIgnoreCase(input)).findFirst();
@@ -145,17 +152,17 @@ final class ChatService implements AutoCloseable {
                 "1", HISTORY_KEY, Base64.getEncoder().encodeToString(E33Protocol.history(List.of(entry))));
         }
         publish("BroadcastRaw", sender.getUUID().toString(), json(rendered), "trchat.chat", "true", "",
-            rendered.getString(), PlayerNames.account(sender), "", encoded(chat)).thenAccept(ok -> {
+            rendered.getString(), PlayerNames.account(sender), mentionAccounts(text), encoded(chat)).thenAccept(ok -> {
                 if (!ok && config.redis.enabled) server.execute(() -> noticeIfOnline(sender.getUUID(), "§e跨服连接不可用，本条消息仅在本服显示。"));
             });
     }
 
     private Component body(ServerPlayer sender, String text) {
-        MutableComponent result = Component.empty();
+        ChatText.Builder result = new ChatText.Builder();
         int offset = 0;
         var matcher = Pattern.compile("\\[(?:item|i)\\]").matcher(text);
         while (matcher.find()) {
-            result.append(links(text.substring(offset, matcher.start())));
+            links(result, text.substring(offset, matcher.start()));
             ItemStack item = sender.getMainHandItem();
             if (!config.itemHover || item.isEmpty()) result.append(Component.literal("[空手]"));
             else {
@@ -169,50 +176,54 @@ final class ChatService implements AutoCloseable {
             }
             offset = matcher.end();
         }
-        result.append(links(text.substring(offset)));
-        return bounded(result);
+        links(result, text.substring(offset));
+        return bounded(result.build());
     }
     private Component bounded(Component value) {
         if (json(value).length() <= 16384) return value;
         String text = value.getString();
         return Component.literal(text.length() > 8192 ? text.substring(0, 8192) : text);
     }
-    private static Component links(String text) {
-        MutableComponent output = Component.empty(); int offset = 0;
+    private void links(ChatText.Builder output, String text) {
+        int offset = 0;
         var matcher = LINKS.matcher(text);
         while (matcher.find()) {
-            output.append(text.substring(offset, matcher.start()));
+            mentionText(output, text.substring(offset, matcher.start()));
             String url = matcher.group();
             output.append(Component.literal(url).withStyle(style -> style.withColor(ChatFormatting.AQUA)
                 .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url))));
             offset = matcher.end();
         }
-        return output.append(text.substring(offset));
+        mentionText(output, text.substring(offset));
     }
-    private Component format(ServerPlayer sender, Component body) {
-        MutableComponent result = Component.empty(); int offset = 0;
-        var matcher = TOKENS.matcher(config.publicFormat);
-        while (matcher.find()) {
-            result.append(config.publicFormat.substring(offset, matcher.start()));
-            result.append(switch (matcher.group(1)) {
-                case "server" -> Component.literal(config.serverName);
-                case "display" -> PlayerNames.display(sender);
-                case "player" -> Component.literal(PlayerNames.account(sender));
-                default -> body;
-            });
-            offset = matcher.end();
+    private void mentionText(ChatText.Builder output, String text) {
+        int offset = 0;
+        for (var hit : Mentions.find(text, players())) {
+            output.append(text.substring(offset, hit.start()));
+            output.append(Component.literal(text.substring(hit.start(), hit.end())).withStyle(style -> style.withColor(ChatFormatting.AQUA)
+                .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/msg " + hit.player().account() + " "))
+                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hit.player().account() + " [" + hit.player().server() + "]\n点击私聊")))));
+            offset = hit.end();
         }
-        return result.append(config.publicFormat.substring(offset));
+        output.append(text.substring(offset));
+    }
+    private String mentionAccounts(String text) {
+        return String.join(",", Mentions.find(text, players()).stream().map(h -> h.player().account()).distinct().toList());
+    }
+    private Component prefix() { return ChatText.render(config.serverPrefix, Map.of("server", Component.literal(config.serverName))); }
+    private Component format(ServerPlayer sender, Component body) {
+        return ChatText.render(config.publicFormat, Map.of("server", Component.literal(config.serverName), "prefix", prefix(),
+            "display", PlayerNames.display(sender), "player", Component.literal(PlayerNames.account(sender)), "message", body));
     }
     private String json(Component component) { return Component.Serializer.toJson(component, server.registryAccess()); }
     private Component component(String raw, String fallback) {
         try { Component parsed = Component.Serializer.fromJson(raw, server.registryAccess()); if (parsed != null) return parsed; }
         catch (Exception ignored) { }
-        return Component.literal(fallback);
+        return ChatText.parse(fallback);
     }
     private E33Protocol.BridgeChat semantic(ServerPlayer sender, String text, Component body, Component rendered, boolean privateMessage, String recipient) {
         E33Protocol.Quote quote = quotes.remove(sender.getUUID());
-        List<UUID> mentions = players().stream().filter(p -> text.contains("@" + p.account())).map(PlayerDirectory.Entry::uuid).limit(128).toList();
+        List<UUID> mentions = Mentions.find(text, players()).stream().map(h -> h.player().uuid()).distinct().toList();
         Component display = PlayerNames.display(sender);
         return new E33Protocol.BridgeChat(UUID.randomUUID(), sender.getUUID(), PlayerNames.account(sender), display.getString(),
             config.serverName, text, json(body), privateMessage, recipient, quote == null ? "" : quote.sender(), quote == null ? "" : quote.content(),
@@ -229,9 +240,16 @@ final class ChatService implements AutoCloseable {
     }
     private boolean deliver(ServerPlayer receiver, Component rendered, E33Protocol.BridgeChat chat, String account) {
         if (!account.isEmpty() && state.ignores(receiver.getUUID(), account)) return false;
-        if (chat == null || !E33Network.chat(receiver, chat)) receiver.sendSystemMessage(rendered);
-        if (chat != null && chat.mentions().contains(receiver.getUUID())) notice(receiver, "§e" + chat.account() + " 提到了你。");
+        boolean bridged = chat != null && E33Network.chat(receiver, chat);
+        if (!bridged) {
+            receiver.sendSystemMessage(rendered);
+            if (chat != null && chat.mentions().contains(receiver.getUUID()) && !chat.sender().equals(receiver.getUUID())) mentionNotice(receiver, chat.account());
+        }
         return true;
+    }
+    private void mentionNotice(ServerPlayer receiver, String account) {
+        receiver.sendSystemMessage(Component.literal(account + " 提到了你。").withStyle(ChatFormatting.YELLOW), true);
+        receiver.playNotifySound(SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.PLAYERS, 1.0F, 1.0F);
     }
 
     void privateChat(ServerPlayer sender, String targetName, String text) {
@@ -242,15 +260,15 @@ final class ChatService implements AutoCloseable {
         Component body = body(sender, text);
         ServerPlayer receiver = local(target.account());
         Component targetDisplay = receiver == null ? Component.literal(target.display()) : PlayerNames.display(receiver);
-        Component received = bounded(Component.literal("[" + config.serverName + "] [").append(PlayerNames.display(sender)).append(" ➥ 我] ").append(body.copy()));
+        Component received = bounded(prefix().copy().append(" [").append(PlayerNames.display(sender)).append(" ➥ 我] ").append(body.copy()));
         Component echo = bounded(Component.literal("[我 ➦ ").append(targetDisplay).append("] ").append(body.copy()));
         E33Protocol.BridgeChat chat = semantic(sender, text, body, received, true, target.account());
         if (receiver != null) {
             if (!ChatPermissions.has(receiver, ChatPermissions.PRIVATE) || !deliver(receiver, received, chat, chat.account())) {
                 notice(sender, "§c目标玩家当前不接收私聊。"); return;
             }
-            state.replies.put(receiver.getUUID().toString(), chat.account());
-            state.replies.put(sender.getUUID().toString(), target.account());
+            rememberReply(receiver.getUUID(), chat.account());
+            rememberReply(sender.getUUID(), target.account());
             deliver(sender, echo, echo(chat, echo), ""); save(); return;
         }
         if (redis == null || !redis.available()) { notice(sender, "§c跨服私信发送失败：Redis 未连接。"); return; }
@@ -266,7 +284,11 @@ final class ChatService implements AutoCloseable {
     private void acknowledge(String id) {
         Pending sent = pending.remove(id); if (sent == null) return;
         ServerPlayer sender = server.getPlayerList().getPlayer(sent.sender());
-        if (sender != null) { deliver(sender, sent.echo(), echo(sent.chat(), sent.echo()), ""); state.replies.put(sent.sender().toString(), sent.target()); save(); }
+        if (sender != null) { deliver(sender, sent.echo(), echo(sent.chat(), sent.echo()), ""); rememberReply(sent.sender(), sent.target()); save(); }
+    }
+    private void rememberReply(UUID player, String account) {
+        state.replies.put(player.toString(), account);
+        if (redis != null) redis.command("SETEX", "e33chat:v1:reply:" + player, "604800", account);
     }
     private void failPrivate(String id, String reason) {
         Pending sent = pending.remove(id); if (sent != null) noticeIfOnline(sent.sender(), reason);
@@ -299,17 +321,23 @@ final class ChatService implements AutoCloseable {
             notice(sender, "§c请先加入该群聊。"); return;
         }
         if (!allowed(sender, text)) return;
-        Component rendered = bounded(Component.literal("[群 " + group + "] [" + config.serverName + "] ").append(PlayerNames.display(sender)).append(": ")
+        Component rendered = bounded(Component.literal("[群 " + group + "] ").append(prefix()).append(" ").append(PlayerNames.display(sender)).append(": ")
             .append(body(sender, text)));
         quotes.remove(sender.getUUID());
-        deliverGroup(group, PlayerNames.account(sender), rendered);
-        publish("TrNeoGroup", node, UUID.randomUUID().toString(), group, PlayerNames.account(sender), json(rendered), rendered.getString())
+        String mentions = mentionAccounts(text);
+        deliverGroup(group, PlayerNames.account(sender), rendered, mentions);
+        publish("TrNeoGroup", node, UUID.randomUUID().toString(), group, PlayerNames.account(sender), json(rendered), rendered.getString(), mentions)
             .thenAccept(ok -> { if (!ok && config.redis.enabled) server.execute(() -> noticeIfOnline(sender.getUUID(), "§e群聊跨服连接不可用，仅发送到本服群成员。")); });
     }
-    private void deliverGroup(String group, String account, Component rendered) {
+    private void deliverGroup(String group, String account, Component rendered, String mentions) {
+        Set<String> mentioned = new HashSet<>();
+        for (String name : mentions.split(",")) mentioned.add(name.toLowerCase(Locale.ROOT));
         for (ServerPlayer receiver : server.getPlayerList().getPlayers())
             if (group.equals(state.groups.get(receiver.getUUID().toString())) && ChatPermissions.has(receiver, ChatPermissions.GROUP)
-                && !state.ignores(receiver.getUUID(), account)) receiver.sendSystemMessage(rendered);
+                && !state.ignores(receiver.getUUID(), account)) {
+                receiver.sendSystemMessage(rendered);
+                if (!PlayerNames.account(receiver).equalsIgnoreCase(account) && mentioned.contains(PlayerNames.account(receiver).toLowerCase(Locale.ROOT))) mentionNotice(receiver, account);
+            }
     }
 
     void remote(WireMessage envelope) throws IOException {
@@ -320,6 +348,7 @@ final class ChatService implements AutoCloseable {
         if (data.length == 0) return;
         switch (data[0]) {
             case "UpdateNames" -> directory.update(data, System.currentTimeMillis());
+            case "TrNeoDirectoryRequest" -> updateDirectory(null);
             case "BroadcastRaw" -> {
                 if (data.length < 6) return;
                 if (!data[5].isBlank() && !Arrays.asList(data[5].split(";")).contains(Integer.toString(config.directoryId))) return;
@@ -329,8 +358,11 @@ final class ChatService implements AutoCloseable {
                 if (chat != null && chat.privateMessage()) return;
                 if (account.isBlank() && chat != null) account = chat.account();
                 if (chat != null && seen.putIfAbsent(chat.messageId().toString(), System.currentTimeMillis()) != null) return;
+                Set<String> mentioned = new HashSet<>();
+                if (data.length > 8) for (String name : data[8].split(",")) mentioned.add(name.toLowerCase(Locale.ROOT));
                 for (ServerPlayer receiver : server.getPlayerList().getPlayers())
-                    if (ChatPermissions.listen(receiver, data[3])) deliver(receiver, rendered, chat, account);
+                    if (ChatPermissions.listen(receiver, data[3]) && deliver(receiver, rendered, chat, account)
+                        && chat == null && mentioned.contains(PlayerNames.account(receiver).toLowerCase(Locale.ROOT))) mentionNotice(receiver, account);
                 server.sendSystemMessage(rendered);
                 if (chat != null && (data[3].isBlank() || data[3].equals("trchat.chat"))) addHistory(chat);
             }
@@ -349,7 +381,7 @@ final class ChatService implements AutoCloseable {
                 if (chat != null && (!chat.privateMessage() || !chat.recipient().equalsIgnoreCase(data[1]))) chat = null;
                 deliver(receiver, rendered, chat, data[2]);
                 if (!deliveryId.isEmpty()) seen.put("pm:" + deliveryId, System.currentTimeMillis());
-                state.replies.put(receiver.getUUID().toString(), data[2]); save();
+                rememberReply(receiver.getUUID(), data[2]); save();
                 if (!deliveryId.isEmpty()) publish("ForwardMessage", "PrivateDelivered", deliveryId);
             }
             case "PrivateDelivered" -> { if (data.length > 1) acknowledge(data[1]); }
@@ -360,7 +392,7 @@ final class ChatService implements AutoCloseable {
             } }
             case "TrNeoMute" -> { if (data.length >= 3) { UUID.fromString(data[1]); state.mutes.put(data[1], Long.parseLong(data[2])); save(); } }
             case "TrNeoGroup" -> {
-                if (data.length >= 7 && !node.equals(data[1]) && config.groups.contains(data[3])) deliverGroup(data[3], data[4], component(data[5], data[6]));
+                if (data.length >= 7 && !node.equals(data[1]) && config.groups.contains(data[3])) deliverGroup(data[3], data[4], component(data[5], data[6]), data.length > 7 ? data[7] : "");
             }
             case "E33Settings" -> {
                 if (data.length >= 3) { settings = E33Protocol.settings(Base64.getDecoder().decode(data[2])); save(); }
@@ -412,7 +444,7 @@ final class ChatService implements AutoCloseable {
         source.sendSuccess(() -> Component.literal(muted ? "已开启全服禁言。" : "已关闭全服禁言。"), true);
     }
     void announce(CommandSourceStack source, String text) {
-        Component rendered = Component.literal("[公告] " + text).withStyle(ChatFormatting.GOLD);
+        Component rendered = ChatText.parse("&6[公告] " + text);
         server.getPlayerList().broadcastSystemMessage(rendered, false);
         publish("BroadcastRaw", new UUID(0, 0).toString(), json(rendered), "", "true", "", rendered.getString(), "", "", "");
         source.sendSuccess(() -> Component.literal("已发布公告。"), true);
@@ -429,10 +461,21 @@ final class ChatService implements AutoCloseable {
         syncClient(player);
         if (redis != null) {
             UUID uuid = player.getUUID();
+            restoreReply(player);
             redis.command("GET", "trchat:neo:mute:" + uuid).thenAccept(value -> server.execute(() -> {
                 if (!closed && value instanceof String until) { try { state.mutes.put(uuid.toString(), Long.parseLong(until)); save(); } catch (NumberFormatException ignored) { } }
             }));
         }
+    }
+    private void restoreReply(ServerPlayer player) {
+        UUID uuid = player.getUUID();
+        String previous = state.replies.get(uuid.toString());
+        redis.command("GET", "e33chat:v1:reply:" + uuid).thenAccept(value -> server.execute(() -> {
+            if (!closed && server.getPlayerList().getPlayer(uuid) != null && value instanceof String account
+                && account.matches("[A-Za-z0-9_]{1,16}") && Objects.equals(previous, state.replies.get(uuid.toString()))) {
+                state.replies.put(uuid.toString(), account); save();
+            }
+        }));
     }
     void quit(ServerPlayer player) {
         if (config.showJoinLeave) systemNotice(PlayerNames.account(player) + " 离开了 " + config.serverName);
@@ -456,12 +499,15 @@ final class ChatService implements AutoCloseable {
     void tick() {
         long now = System.currentTimeMillis();
         for (String id : new ArrayList<>(pending.keySet())) if (pending.get(id).expires() < now) failPrivate(id, "§c跨服私信未获目标服务器确认，请检查连接或玩家在线状态。");
-        if (++ticks % 200 != 0) return;
-        seen.values().removeIf(time -> now - time > 60000);
+        boolean periodic = ++ticks % 200 == 0;
+        if (periodic) seen.values().removeIf(time -> now - time > 60000);
         if (redis != null) {
-            redis.heartbeat();
+            if (periodic) redis.heartbeat();
             boolean available = redis.available();
             if (available && !connected) {
+                publish("TrNeoDirectoryRequest");
+                updateDirectory(null);
+                for (ServerPlayer player : server.getPlayerList().getPlayers()) restoreReply(player);
                 redis.command("GET", "trchat:neo:global-mute").thenAccept(value -> server.execute(() -> {
                     if (!closed && value instanceof String mute) { state.globalMute = Boolean.parseBoolean(mute); save(); }
                 }));
@@ -473,7 +519,7 @@ final class ChatService implements AutoCloseable {
             }
             connected = available;
         }
-        updateDirectory(null);
+        if (periodic) updateDirectory(null);
     }
     private void noticeIfOnline(UUID uuid, String text) { ServerPlayer player = server.getPlayerList().getPlayer(uuid); if (!closed && player != null) notice(player, text); }
 

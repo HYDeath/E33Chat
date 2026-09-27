@@ -39,6 +39,7 @@ class RedisBridgeTest {
                         }
                         case "PING" -> reply(out, "+PONG\r\n");
                         case "SET" -> { values.put(command.get(1), command.get(2)); reply(out, "+OK\r\n"); }
+                        case "SETEX" -> { values.put(command.get(1), command.get(3)); reply(out, "+OK\r\n"); }
                         case "GET" -> { synchronized (out) { bulk(out, values.get(command.get(1))); out.flush(); } }
                         case "PUBLISH" -> {
                             for (OutputStream target : subscribers.values()) synchronized (target) {

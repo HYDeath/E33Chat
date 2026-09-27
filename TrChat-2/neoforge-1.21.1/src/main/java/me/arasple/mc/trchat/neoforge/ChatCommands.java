@@ -50,8 +50,8 @@ final class ChatCommands {
             .then(literal("clear").requires(ChatCommands::admin).executes(c -> run(c, service, s -> s.clear(c.getSource()))));
         dispatcher.register(root);
         for (String alias : java.util.List.of("msg", "tell", "w", "m")) dispatcher.register(literal(alias)
-            .then(argument("player", StringArgumentType.word())
-                .suggests((c, b) -> SharedSuggestionProvider.suggest(service.get() == null ? java.util.List.of() : service.get().names(), b))
+            .then(argument("player", StringArgumentType.string())
+                .suggests((c, b) -> SharedSuggestionProvider.suggest(service.get() == null ? java.util.List.of() : service.get().privateNames(), b))
                 .then(argument("message", StringArgumentType.greedyString())
                     .executes(c -> run(c, service, s -> s.privateChat(c.getSource().getPlayerOrException(), StringArgumentType.getString(c, "player"), StringArgumentType.getString(c, "message")))))));
         for (String alias : java.util.List.of("reply", "r")) dispatcher.register(literal(alias)

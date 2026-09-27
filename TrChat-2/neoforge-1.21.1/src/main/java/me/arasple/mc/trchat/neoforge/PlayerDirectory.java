@@ -15,7 +15,7 @@ final class PlayerDirectory {
             if (accounts.length != displays.length || accounts.length != ids.length || accounts.length > 2048)
                 throw new IllegalArgumentException("Directory length mismatch");
             for (int i = 0; i < accounts.length; i++)
-                players.add(new Entry(accounts[i], displays[i].equals("#") ? accounts[i] : displays[i],
+                players.add(new Entry(accounts[i], displays[i].equals("#") ? accounts[i] : ChatText.parse(displays[i]).getString(),
                     parseUuid(ids[i]), data.length > 5 ? data[5] : data[1]));
         }
         nodes.put(data[1], new Node(now, players));

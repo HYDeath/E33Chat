@@ -13,11 +13,12 @@ public final class ChatConfig {
     static final Gson JSON = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
     public String serverName = "模组服";
     public int directoryId = 25565;
-    public String publicFormat = "[{server}] {display}: {message}";
+    public String serverPrefix = "&#8AE7B7[&#89E98C模&#87EB61组&#86EC35服&#84EE0A]";
+    public String publicFormat = "{prefix} {display}: {message}";
     public int maxMessageLength = 256;
     public int cooldownMillis = 1000;
     public boolean blockRepeatedMessages = true;
-    public boolean showJoinLeave = true;
+    public boolean showJoinLeave = false;
     public boolean itemHover = true;
     public List<String> blockedWords = List.of();
     public List<String> groups = List.of("team", "trade");
@@ -53,7 +54,7 @@ public final class ChatConfig {
     static void validate(ChatConfig c) {
         if (c == null || c.redis == null || c.groups == null || c.blockedWords == null)
             throw new IllegalArgumentException("Required config field is null");
-        if (c.serverName == null || c.serverName.length() > 128 || c.publicFormat == null || c.publicFormat.length() > 512)
+        if (c.serverName == null || c.serverName.length() > 128 || c.serverPrefix == null || c.serverPrefix.length() > 512 || c.publicFormat == null || c.publicFormat.length() > 512)
             throw new IllegalArgumentException("Invalid serverName/publicFormat");
         if (c.directoryId < 1 || c.maxMessageLength < 1 || c.maxMessageLength > 1024 || c.cooldownMillis < 0)
             throw new IllegalArgumentException("Invalid directoryId/message limit/cooldown");
