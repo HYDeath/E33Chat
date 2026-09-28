@@ -91,6 +91,10 @@ sealed interface BukkitProxyProcessor : PluginMessageListener {
                 // Every proxy node receives ForwardMessage. Only the node that
                 // owns the recipient may deliver or acknowledge this private chat.
                 if (local == null || !local.isOnline) return
+                if (!receivedChat.accept(data)) {
+                    local.scheduler.run(bukkitPlugin, { acknowledgePrivate(local, data) }, null)
+                    return
+                }
                 if (from.isNotEmpty()) E33Bridge.acceptReply(to, from)
                 if (bridgeChat.isNotEmpty()) {
                     local.scheduler.run(bukkitPlugin, {
@@ -119,6 +123,9 @@ sealed interface BukkitProxyProcessor : PluginMessageListener {
                 val message = kotlin.runCatching { Components.parseRaw(raw) }.getOrElse { Components.text(fallback) }
 
                 if (ports == null || BukkitProxyManager.port in ports) {
+                    // Gate the whole delivery before scheduling any recipient,
+                    // including ordinary clients without E33's client-side dedupe.
+                    if (!receivedChat.accept(data)) return
                     val receivers = onlinePlayers.filter { perm == "" || it.hasPermission(perm) }
                     receivers.forEach { receiver ->
                         if (bridgeChat.isNotEmpty()) {
@@ -351,6 +358,8 @@ sealed interface BukkitProxyProcessor : PluginMessageListener {
     }
 
     companion object {
+
+        private val receivedChat = ProxyMessageDeduplicator()
 
         protected fun String.registerOutgoing() {
             if (!Bukkit.getMessenger().isOutgoingChannelRegistered(bukkitPlugin, this)) {

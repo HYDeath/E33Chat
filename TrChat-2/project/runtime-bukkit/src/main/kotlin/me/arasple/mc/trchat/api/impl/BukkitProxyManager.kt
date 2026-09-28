@@ -204,7 +204,8 @@ object BukkitProxyManager : ClientMessageManager {
             fallback,
             senderName,
             mentioned,
-            bridgeChat)
+            bridgeChat,
+            UUID.randomUUID().toString())
         )
     }
 

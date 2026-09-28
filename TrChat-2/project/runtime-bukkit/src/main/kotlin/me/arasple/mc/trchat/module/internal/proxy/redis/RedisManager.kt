@@ -1,6 +1,7 @@
 package me.arasple.mc.trchat.module.internal.proxy.redis
 
 import me.arasple.mc.trchat.api.impl.BukkitProxyManager
+import me.arasple.mc.trchat.module.internal.proxy.ProxyMessageDeduplicator
 import org.bukkit.Bukkit
 import taboolib.platform.util.bukkitPlugin
 import me.arasple.mc.trchat.module.conf.file.Settings
@@ -18,50 +19,73 @@ import taboolib.module.configuration.ConfigNode
 object RedisManager {
 
     private var connector: SingleRedisConnector? = null
+    private var subscribedConnection: SingleRedisConnection? = null
+    private val receivedMessages = ProxyMessageDeduplicator()
+    @Volatile
+    private var stopped = false
+    @Volatile
     var connection: SingleRedisConnection? = null
+        private set
     var channel = "trchat-message"
 
     @ConfigNode("Redis.enabled", "settings.yml")
     var enabled = false
         private set
 
+    @Synchronized
     operator fun invoke(default: Boolean = true): SingleRedisConnection? {
-        if (!enabled) {
+        if (!enabled || stopped) {
             return null
         }
-        if (connector == null) {
-            connector = AlkaidRedis.create().apply {
-                fromConfig(Settings.conf.getConfigurationSection("Redis")!!)
-            }
+        connection?.let {
+            if (default) init(it)
+            return it
         }
         return try {
-            connection?.close()
+            if (connector == null) {
+                connector = AlkaidRedis.create().apply {
+                    fromConfig(Settings.conf.getConfigurationSection("Redis")!!)
+                }
+            }
             connection = connector!!.connect().connection()
             if (default) init(connection!!)
             connection
         } catch (ex: Exception) {
-            connection = null
+            disconnect()
             Bukkit.getLogger().warning("TrChat Redis unavailable; continuing with local chat: ${ex.message}")
             null
         }
     }
 
+    @Synchronized
     fun init(connection: SingleRedisConnection) {
+        if (this.connection !== connection || subscribedConnection === connection) return
+        subscribedConnection = connection
         connection.subscribe(channel) {
-            val message = get<TrRedisMessage>(ignoreConstructor = true)
+            if (this@RedisManager.connection !== connection) return@subscribe
+            val message = try {
+                get<TrRedisMessage>(ignoreConstructor = true)
+            } catch (ex: Exception) {
+                Bukkit.getLogger().warning("Rejected malformed TrChat Redis event: ${ex.message}")
+                return@subscribe
+            }
+            if (!receivedMessages.accept(message.messageId ?: message.neoId)) return@subscribe
             Bukkit.getGlobalRegionScheduler().run(bukkitPlugin) {
-                BukkitProxyManager.processor?.execute(message.data)
+                if (this@RedisManager.connection === connection)
+                    BukkitProxyManager.processor?.execute(message.data)
             }
         }
     }
 
     fun sendMessage(message: TrRedisMessage): Boolean {
-        if (enabled) {
+        if (enabled && !stopped) {
             return try {
                 (connection ?: RedisManager())?.publish(channel, message) ?: return false
                 true
             } catch (ex: Exception) {
-                connection = null
+                // Alkaid reconnects the connection and its subscription internally.
+                // Replacing it here leaves the old subscriber alive, causing every
+                // reconnect to add another delivery of the same public message.
                 Bukkit.getLogger().warning("TrChat Redis publish failed: ${ex.message}")
                 false
             }
@@ -70,8 +94,19 @@ object RedisManager {
     }
 
     @Awake(LifeCycle.DISABLE)
+    @Synchronized
     fun close() {
-        connection?.close()
+        stopped = true
+        disconnect()
+    }
+
+    private fun disconnect() {
+        val previous = connection
+        connection = null
+        subscribedConnection = null
+        kotlin.runCatching { previous?.close() }
+        kotlin.runCatching { connector?.close() }
+        connector = null
     }
 
 }
