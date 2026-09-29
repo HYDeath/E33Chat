@@ -527,9 +527,13 @@ public final class E33Bridge implements Listener, PluginMessageListener {
 
     public static void rememberBody(UUID sender, Component body) {
         E33Bridge bridge = instance;
-        if (bridge != null && body != null)
+        if (bridge != null && body != null) {
+            Component preview = body;
+            try { preview = E33ItemPreview.attach(body); }
+            catch (RuntimeException ignored) { }
             bridge.bodyJsons.put(sender, GsonComponentSerializer.gson().serialize(
-                expandCraftEmoji(bridge.players.get(sender), body)));
+                expandCraftEmoji(bridge.players.get(sender), preview)));
+        }
     }
 
     public static void rememberMentions(UUID sender, java.util.Set<String> names) {

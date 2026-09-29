@@ -231,6 +231,7 @@ public class ChatBubbleScreen extends ChatScreen {
 
     private final List<int[]> bubbleRects = new ArrayList<>();
     private final List<ClickableSpan> clickableSpans = new ArrayList<>();
+    private net.minecraft.item.ItemStack previewTip;
 
     private int replyTargetIndex = -1;
     private int copyToastTicks;
@@ -1598,8 +1599,15 @@ public class ChatBubbleScreen extends ChatScreen {
 
         renderTitleBar(g, mouseX, mouseY, anim);
         renderMessages(g, mouseX, mouseY);
+        boolean drewItemTip = previewTip != null;
+        if (drewItemTip) {
+            //#if MC >= 12000
+            ChatItemCards.tooltip(g, textRenderer, previewTip, mouseX, mouseY, width, height);
+            //#endif
+            previewTip = null;
+        }
         Style hovered = getHoveredStyle(mouseX, mouseY);
-        if (hovered != null && hovered.getHoverEvent() != null) {
+        if (!drewItemTip && hovered != null && hovered.getHoverEvent() != null) {
             //#if MC >= 12000
             //#if MC < 26000
             g.drawHoverEvent(textRenderer, hovered, mouseX, mouseY);
@@ -2122,14 +2130,17 @@ public class ChatBubbleScreen extends ChatScreen {
                 && parsed.images().isEmpty() && ChatLinks.firstCardUrl(msg.content()) == null;
             //#endif
             float s = skinEligible ? 1f : bubbleScale();
-            List<OrderedText> lines = wrapContent(parsed.textWithoutImages(),
-                skinEligible ? Math.max(16, bubbleMaxW - 24) : bubbleWrapWidth(bubbleMaxW));
+            Text visible = ChatItemCards.without(parsed.textWithoutImages());
+            java.util.List<ChatItemCards.Card> itemCards = ChatItemCards.find(parsed.textWithoutImages());
+            int wrapW = skinEligible ? Math.max(16, bubbleMaxW - 24) : bubbleWrapWidth(bubbleMaxW);
+            List<OrderedText> lines = visible.getString().isBlank() && !itemCards.isEmpty()
+                ? List.of() : wrapContent(visible, wrapW);
             double contentH = lines.size() * textRenderer.fontHeight + BUBBLE_PAD_Y * 2;
             for (var ref : parsed.images()) {
                 contentH += imageCardHeight(ref.url(), cardW) + 2;
             }
             if (ChatLinks.firstCardUrl(msg.content()) != null) contentH += LINK_CARD_H + 3;
-            h = NAME_H + (int)(contentH * s);
+            h = NAME_H + (int)(contentH * s) + ChatItemCards.height(itemCards, textRenderer, bubbleMaxW);
             //#if MC >= 26000
             if (skinEligible) {
                 NameplateBubbleSkin frameSkin = NameplateBubbleScreen.selectedSkin(lines.size());
@@ -2218,11 +2229,16 @@ public class ChatBubbleScreen extends ChatScreen {
             && parsed.images().isEmpty() && ChatLinks.firstCardUrl(msg.content()) == null;
         //#endif
         float s = skinEligible ? 1f : bubbleScale();
-        List<OrderedText> lines = wrapContent(parsed.textWithoutImages(),
-            skinEligible ? Math.max(16, bubbleMaxW - 24) : bubbleWrapWidth(bubbleMaxW));
+        Text visible = ChatItemCards.without(parsed.textWithoutImages());
+        java.util.List<ChatItemCards.Card> itemCards = ChatItemCards.find(parsed.textWithoutImages());
+        int wrapW = skinEligible ? Math.max(16, bubbleMaxW - 24) : bubbleWrapWidth(bubbleMaxW);
+        List<OrderedText> lines = visible.getString().isBlank() && !itemCards.isEmpty()
+            ? List.of() : wrapContent(visible, wrapW);
 
         int textW = 0;
         for (var line : lines) textW = Math.max(textW, textRenderer.getWidth(line));
+        int itemW = ChatItemCards.width(itemCards, textRenderer, bubbleMaxW);
+        int itemH = ChatItemCards.height(itemCards, textRenderer, bubbleMaxW);
         int imageW = 0;
         int imageH = 0;
         if (!parsed.images().isEmpty()) {
@@ -2231,9 +2247,10 @@ public class ChatBubbleScreen extends ChatScreen {
         }
         String cardUrl = ChatLinks.firstCardUrl(msg.content());
         int cardW = cardUrl == null ? 0 : Math.min(LINK_CARD_W, bubbleMaxW);
-        int bubbleW = (int)((Math.max(Math.max(textW, imageW), cardW) + BUBBLE_PAD_X * 2) * s);
+        int bubbleW = Math.max((int)((Math.max(Math.max(textW, imageW), cardW) + BUBBLE_PAD_X * 2) * s),
+            itemW + (int)(BUBBLE_PAD_X * 2 * s));
         int bubbleH = (int)((lines.size() * textRenderer.fontHeight + BUBBLE_PAD_Y * 2 + imageH
-            + (cardUrl == null ? 0 : LINK_CARD_H + 3)) * s);
+            + (cardUrl == null ? 0 : LINK_CARD_H + 3)) * s) + itemH;
         boolean customFrame = false;
         //#if MC >= 26000
         NameplateBubbleSkin frameSkin = skinEligible ? NameplateBubbleScreen.selectedSkin(lines.size()) : null;
@@ -2353,6 +2370,15 @@ public class ChatBubbleScreen extends ChatScreen {
             int imgTop = bubbleY + (int)(BUBBLE_PAD_Y * s) + (int)(lines.size() * textRenderer.fontHeight * s);
             renderImageCards(g, parsed.images(), bubbleX + (int)(BUBBLE_PAD_X * s), imgTop,
                 (int)(Math.max(textW, imageW) * s), mouseX, mouseY, alpha);
+        }
+        if (!itemCards.isEmpty()) {
+            //#if MC >= 12000
+            int itemTop = bubbleY + (int)((BUBBLE_PAD_Y + lines.size() * textRenderer.fontHeight + imageH) * s);
+            net.minecraft.item.ItemStack tip = ChatItemCards.drawCards(g, textRenderer, itemCards,
+                bubbleX + (int)(BUBBLE_PAD_X * s), itemTop, bubbleMaxW, mouseX, mouseY, alpha,
+                (cx, cy, cw, ch, style) -> clickableSpans.add(new ClickableSpan(cx, cy, cw, ch, style)));
+            if (tip != null) previewTip = tip;
+            //#endif
         }
 
         if (cardUrl != null) {

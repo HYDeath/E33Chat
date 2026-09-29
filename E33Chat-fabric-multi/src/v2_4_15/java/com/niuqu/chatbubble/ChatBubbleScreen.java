@@ -203,6 +203,7 @@ public class ChatBubbleScreen extends ChatScreen {
 
     private final List<int[]> bubbleRects = new ArrayList<>();
     private final List<ClickableSpan> clickableSpans = new ArrayList<>();
+    private net.minecraft.item.ItemStack previewTip;
     private final List<TextSpan> textSpans = new ArrayList<>();
     private final ChatTextSelection textSelection = new ChatTextSelection();
 
@@ -1515,8 +1516,13 @@ public class ChatBubbleScreen extends ChatScreen {
         // 上下栏背景只跟开合动画（fade 终点 1.0 不透明），不乘 PANEL_OPACITY（2.3.7 起永久半透明回归）
         renderTitleBar(g, mouseX, mouseY, getBarAlpha());
         renderMessages(g, mouseX, mouseY);
+        boolean drewItemTip = previewTip != null;
+        if (drewItemTip) {
+            ChatItemCards.tooltip(g, textRenderer, previewTip, mouseX, mouseY, width, height);
+            previewTip = null;
+        }
         Style hovered = getHoveredStyle(mouseX, mouseY);
-        if (hovered != null && hovered.getHoverEvent() != null) {
+        if (!drewItemTip && hovered != null && hovered.getHoverEvent() != null) {
             if (hovered.getHoverEvent() instanceof net.minecraft.network.chat.HoverEvent.ShowText show)
                 g.setTooltipForNextFrame(show.value(), mouseX, mouseY);
         }
@@ -2152,7 +2158,8 @@ public class ChatBubbleScreen extends ChatScreen {
                 msgHeightCache.put(msg, h);
                 return h;
             }
-            if (cardUrl == null && msg.isOwn() && msg.replyContent() == null && NameplateBubbleScreen.hasSelectedSkin()) {
+            java.util.List<ChatItemCards.Card> previewCards = ChatItemCards.find(parsed.textWithoutImages());
+            if (previewCards.isEmpty() && cardUrl == null && msg.isOwn() && msg.replyContent() == null && NameplateBubbleScreen.hasSelectedSkin()) {
                 List<OrderedText> frameLines = wrapContent(parsed.textWithoutImages(), Math.max(16, bubbleMaxW - 24));
                 NameplateBubbleSkin frameSkin = NameplateBubbleScreen.selectedSkin(frameLines.size());
                 int textW = 0;
@@ -2165,11 +2172,14 @@ public class ChatBubbleScreen extends ChatScreen {
                 }
             }
             float s = Appearance.bubbleScale(textRenderer.fontHeight);
-            List<OrderedText> lines = wrapContent(parsed.textWithoutImages(), Appearance.bubbleWrapWidth(bubbleMaxW, textRenderer.fontHeight));
+            Text visible = ChatItemCards.without(parsed.textWithoutImages());
+            java.util.List<ChatItemCards.Card> itemCards = ChatItemCards.find(parsed.textWithoutImages());
+            List<OrderedText> lines = visible.getString().isBlank() && !itemCards.isEmpty()
+                ? List.of() : wrapContent(visible, Appearance.bubbleWrapWidth(bubbleMaxW, textRenderer.fontHeight));
             double contentH = lines.size() * textRenderer.fontHeight + BUBBLE_PAD_Y * 2;
             if (cardUrl != null) contentH += LINK_CARD_H + 3;
             if (msg.replyContent() != null) contentH += textRenderer.fontHeight + 7;
-            h = NAME_H + (int) (contentH * s);
+            h = NAME_H + (int) (contentH * s) + ChatItemCards.height(itemCards, textRenderer, bubbleMaxW);
         }
         msgHeightCache.put(msg, h);
         return h;
@@ -2285,9 +2295,11 @@ public class ChatBubbleScreen extends ChatScreen {
 
         // Bubble path only: re-wrap at the scaled width so bigger bubbles fit fewer
         // characters per line (bubble-less emote/image paths above keep the unscaled lines).
-        boolean skinEligible = cardUrl == null && own && msg.replyContent() == null && NameplateBubbleScreen.hasSelectedSkin();
+        java.util.List<ChatItemCards.Card> itemCards = ChatItemCards.find(parsed.textWithoutImages());
+        boolean skinEligible = itemCards.isEmpty() && cardUrl == null && own && msg.replyContent() == null && NameplateBubbleScreen.hasSelectedSkin();
         float s = skinEligible ? 1f : Appearance.bubbleScale(textRenderer.fontHeight);
-        lines = wrapContent(parsed.textWithoutImages(), skinEligible
+        Text visible = ChatItemCards.without(parsed.textWithoutImages());
+        lines = visible.getString().isBlank() && !itemCards.isEmpty() ? List.of() : wrapContent(visible, skinEligible
             ? Math.max(16, bubbleMaxW - 24)
             : Appearance.bubbleWrapWidth(bubbleMaxW, textRenderer.fontHeight));
         int textW = 0;
@@ -2302,9 +2314,12 @@ public class ChatBubbleScreen extends ChatScreen {
             for (var line : lines) textW = Math.max(textW, textRenderer.getWidth(line));
         }
         int cardW = cardUrl == null ? 0 : Math.min(LINK_CARD_W, Math.max(1, (int) (bubbleMaxW / s)));
-        int bubbleW = (int) ((Math.max(textW, cardW) + BUBBLE_PAD_X * 2) * s);
+        int itemW = ChatItemCards.width(itemCards, textRenderer, bubbleMaxW);
+        int itemH = ChatItemCards.height(itemCards, textRenderer, bubbleMaxW);
+        int bubbleW = Math.max((int) ((Math.max(textW, cardW) + BUBBLE_PAD_X * 2) * s),
+            itemW + (int) (BUBBLE_PAD_X * 2 * s));
         int bubbleH = (int) ((lines.size() * textRenderer.fontHeight + BUBBLE_PAD_Y * 2
-            + (cardUrl == null ? 0 : LINK_CARD_H + 3)) * s);
+            + (cardUrl == null ? 0 : LINK_CARD_H + 3)) * s) + itemH;
         if (customFrame) {
             bubbleW = textRenderer.getWidth(frame);
             bubbleH = frameSkin.height();
@@ -2401,6 +2416,14 @@ public class ChatBubbleScreen extends ChatScreen {
                     Math.max(1, (int)(sp.w() * s)),
                     Math.max(1, (int)(sp.h() * s))));
             }
+        }
+
+        if (!itemCards.isEmpty()) {
+            int itemTop = bubbleY + (int) ((BUBBLE_PAD_Y + lines.size() * textRenderer.fontHeight) * s);
+            net.minecraft.item.ItemStack tip = ChatItemCards.drawCards(g, textRenderer, itemCards,
+                bubbleX + (int) (BUBBLE_PAD_X * s), itemTop, bubbleMaxW, mouseX, mouseY, alpha,
+                (cx, cy, cw, ch, style) -> clickableSpans.add(new ClickableSpan(cx, cy, cw, ch, style)));
+            if (tip != null) previewTip = tip;
         }
 
         if (cardUrl != null) {
