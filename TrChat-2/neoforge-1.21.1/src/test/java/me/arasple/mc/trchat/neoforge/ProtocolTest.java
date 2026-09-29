@@ -16,6 +16,18 @@ class ProtocolTest {
         assertEquals("Alex", packet.data()[2]);
         assertEquals("delivery-id", packet.data()[8]);
     }
+    @Test void acceptsBukkitNullNeoIdAndSingleElementData() {
+        var chat = WireMessage.decode("{\"data\":[\"BroadcastRaw\",\"uuid\",\"{\\\"text\\\":\\\"hi\\\"}\",\"\",\"true\",\"\",\"hi\",\"Steve\",\"\",\"\"],\"messageId\":\"mid-1\",\"neoId\":null}");
+        assertEquals("", chat.node());
+        assertEquals("mid-1", chat.id());
+        assertEquals("BroadcastRaw", chat.data()[0]);
+        assertEquals("Steve", chat.data()[7]);
+        var directory = WireMessage.decode("{\"data\":\"TrNeoDirectoryRequest\",\"messageId\":\"mid-2\",\"neoId\":null,\"neoNode\":null}");
+        assertArrayEquals(new String[] {"TrNeoDirectoryRequest"}, directory.data());
+        assertEquals("mid-2", directory.id());
+        assertEquals("", directory.node());
+        assertEquals("hello\u000cworld", WireMessage.decode("{\"data\":[\"hello\u000cworld\"],\"messageId\":\"mid-3\",\"neoId\":null}").data()[0]);
+    }
     @Test void outboundDataRetainsBukkitIndexesAndUnicode() {
         String[] fields = {"BroadcastRaw", UUID.randomUUID().toString(), "{\"text\":\"[item] 中文\"}", "trchat.chat", "true", "", "中文", "Steve", "", ""};
         String raw = WireMessage.encode("node-1", fields);

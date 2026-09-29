@@ -77,7 +77,7 @@ final class RedisBridge implements AutoCloseable {
                     Object reply = connection.next();
                     if (reply instanceof List<?> parts && parts.size() == 3 && "message".equals(parts.get(0))) {
                         try { receiver.accept((String) parts.get(2)); }
-                        catch (RuntimeException ex) { TrChatMod.LOGGER.warn("Rejected malformed TrChat Redis event"); }
+                        catch (RuntimeException ex) { TrChatMod.LOGGER.warn("Rejected malformed TrChat Redis event: {}", ex.toString()); }
                     }
                 }
             } catch (SocketTimeoutException ignored) {

@@ -1,10 +1,10 @@
 # TrChat NeoForge 1.21.1
 
-服务端聊天模组，版本 `2.5.3+neo.3`。用于 Minecraft **1.21.1 / NeoForge 21.1.x / Java 21**，独立构建，不依赖 Bukkit、TabooLib、PlaceholderAPI 或运行时下载库。编译目标为 NeoForge **21.1.252**。客户端无需安装这个服务端模组，照常使用服务器要求的模组包即可。
+服务端聊天模组，版本 `2.5.3+neo.4`。用于 Minecraft **1.21.1 / NeoForge 21.1.x / Java 21**，独立构建，不依赖 Bukkit、TabooLib、PlaceholderAPI 或运行时下载库。编译目标为 NeoForge **21.1.252**。客户端无需安装这个服务端模组，照常使用服务器要求的模组包即可。
 
 ## 安装与跨服
 
-1. 将 `TrChat-NeoForge-1.21.1-2.5.3+neo.3.jar` 放进模组服的 `mods/`，更新时替换旧版本，目录中只保留一个 TrChat 模组 JAR。Paper/Folia 服务器继续使用本仓库的 Bukkit TrChat JAR。
+1. 将 `TrChat-NeoForge-1.21.1-2.5.3+neo.4.jar` 放进模组服的 `mods/`，更新时替换旧版本，目录中只保留一个 TrChat 模组 JAR。Paper/Folia 服务器继续使用本仓库的 Bukkit TrChat JAR。
 2. 首次正常启动后生成 `config/trchat-neoforge.json`。设置 `serverName` 为玩家看到的名称，`directoryId` 为网络内唯一的数字；它不能与其他 NeoForge 节点或 Paper 后端的端口数字重复。
 3. 跨服时将 NeoForge 配置的 `redis.enabled` 改为 `true`，填写 Redis 连接信息。Paper 的 TrChat `settings.yml` 中同样启用 `Redis.enabled`，并使用相同 Redis 与发布频道 `trchat-message`。Paper 可保持 `Options.Proxy: AUTO` 或指定 `REDIS`。
 4. 执行 `/trchat reload` 重载 NeoForge 配置。Paper 根据其现有流程重载或重启。Velocity/Bungee 只需承担玩家连接；此版本的聊天互通走 Redis，**不使用代理插件消息桥**。
