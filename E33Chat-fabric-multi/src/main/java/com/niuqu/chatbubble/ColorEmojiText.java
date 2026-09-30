@@ -41,6 +41,13 @@ final class ColorEmojiText {
                     //#endif
                     //#endif
                     run = next;
+                } else {
+                    Style craft = ChatEmojiPanel.craftStyle(cp);
+                    if (craft != null && style.getFont() == null) {
+                        if (i > run) result.append(Text.literal(text.substring(run, i)).fillStyle(style));
+                        result.append(Text.literal(text.substring(i, next)).fillStyle(craft));
+                        run = next;
+                    }
                 }
                 i = next;
             }

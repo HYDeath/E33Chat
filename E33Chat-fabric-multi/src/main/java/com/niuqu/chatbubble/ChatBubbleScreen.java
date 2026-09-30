@@ -597,7 +597,17 @@ public class ChatBubbleScreen extends ChatScreen {
         mentionNavigated = false;
     }
 
+    private boolean emojiReplacing;
+
     private void onInputEdited(String text) {
+        if (!emojiReplacing && text != null && !text.startsWith("/")) {
+            emojiReplacing = true;
+            try {
+                if (ChatEmojiPanel.replaceIn(chatField)) return;
+            } finally {
+                emojiReplacing = false;
+            }
+        }
         showMentions = false;
         mentionNavigated = false;
         int atIdx = text.lastIndexOf('@');
@@ -2124,15 +2134,19 @@ public class ChatBubbleScreen extends ChatScreen {
             int bubbleMaxW = panelW - avatarSize() - PAD * 2 - BUBBLE_PAD_X * 2 - 16;
             int cardW = Math.min(IMAGE_MAX_W, bubbleMaxW);
             BracketCodec.ParseResult parsed = parseImages(msg);
+            Text heightText = ChatItemCards.without(parsed.textWithoutImages());
             boolean skinEligible = false;
             //#if MC >= 26000
-            skinEligible = msg.isOwn() && NameplateBubbleScreen.hasSelectedSkin()
+            skinEligible = ChatEmojiPanel.soloScale(heightText, textRenderer.fontHeight) == 0f
+                && msg.isOwn() && NameplateBubbleScreen.hasSelectedSkin()
                 && parsed.images().isEmpty() && ChatLinks.firstCardUrl(msg.content()) == null;
             //#endif
-            float s = skinEligible ? 1f : bubbleScale();
-            Text visible = ChatItemCards.without(parsed.textWithoutImages());
+            float craft = ChatEmojiPanel.soloScale(heightText, textRenderer.fontHeight);
+            float s = craft > 0f ? craft : (skinEligible ? 1f : bubbleScale());
+            Text visible = heightText;
             java.util.List<ChatItemCards.Card> itemCards = ChatItemCards.find(parsed.textWithoutImages());
-            int wrapW = skinEligible ? Math.max(16, bubbleMaxW - 24) : bubbleWrapWidth(bubbleMaxW);
+            int wrapW = craft > 0f ? Math.max(16, (int) (bubbleMaxW / craft))
+                : skinEligible ? Math.max(16, bubbleMaxW - 24) : bubbleWrapWidth(bubbleMaxW);
             List<OrderedText> lines = visible.getString().isBlank() && !itemCards.isEmpty()
                 ? List.of() : wrapContent(visible, wrapW);
             double contentH = lines.size() * textRenderer.fontHeight + BUBBLE_PAD_Y * 2;
@@ -2223,15 +2237,17 @@ public class ChatBubbleScreen extends ChatScreen {
         boolean own = msg.isOwn();
         int bubbleMaxW = panelW - avatarSize() - PAD * 2 - BUBBLE_PAD_X * 2 - 16;
         BracketCodec.ParseResult parsed = parseImages(msg);
+        Text visible = ChatItemCards.without(parsed.textWithoutImages());
+        float craft = ChatEmojiPanel.soloScale(visible, textRenderer.fontHeight);
         boolean skinEligible = false;
         //#if MC >= 26000
-        skinEligible = own && NameplateBubbleScreen.hasSelectedSkin()
+        skinEligible = craft == 0f && own && NameplateBubbleScreen.hasSelectedSkin()
             && parsed.images().isEmpty() && ChatLinks.firstCardUrl(msg.content()) == null;
         //#endif
-        float s = skinEligible ? 1f : bubbleScale();
-        Text visible = ChatItemCards.without(parsed.textWithoutImages());
+        float s = craft > 0f ? craft : (skinEligible ? 1f : bubbleScale());
         java.util.List<ChatItemCards.Card> itemCards = ChatItemCards.find(parsed.textWithoutImages());
-        int wrapW = skinEligible ? Math.max(16, bubbleMaxW - 24) : bubbleWrapWidth(bubbleMaxW);
+        int wrapW = craft > 0f ? Math.max(16, (int) (bubbleMaxW / craft))
+            : skinEligible ? Math.max(16, bubbleMaxW - 24) : bubbleWrapWidth(bubbleMaxW);
         List<OrderedText> lines = visible.getString().isBlank() && !itemCards.isEmpty()
             ? List.of() : wrapContent(visible, wrapW);
 
@@ -3281,7 +3297,7 @@ public class ChatBubbleScreen extends ChatScreen {
     }
 
     private void sendMessage() {
-        String raw = chatField.getText().trim();
+        String raw = ChatEmojiPanel.outgoing(chatField.getText()).trim();
         if (raw.isEmpty()) return;
         if (raw.contains("[[CICode,url=file://")) {
             // A local file:// CICode (chatimage's drag/paste handler inserts
@@ -3354,7 +3370,8 @@ public class ChatBubbleScreen extends ChatScreen {
 
         ChatMessageStore.debugLog("[e33chat] Send | cmd='" + text + "' | display='" + displayText + "' | whisperTarget=" + whisperTarget + " | localBubble=" + localBubble);
         if (localBubble && (!ChatBubbleClientSetup.bridgeReady() || whisperTarget != null)) {
-            Text contentForSend = cfg != null && cfg.colorCodes() ? parseColorCodes(displayText) : Text.literal(displayText);
+            String shown = ChatEmojiPanel.glyphs(displayText);
+            Text contentForSend = cfg != null && cfg.colorCodes() ? parseColorCodes(shown) : Text.literal(shown);
             // 2.3.10+: keep image bracket codes raw so the local bubble renders
             // the picture natively (BracketCodec + ImageLoader); the vanilla chat
             // echo is converted by ChatImage's own mixins when installed.

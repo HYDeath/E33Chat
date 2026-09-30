@@ -1,11 +1,13 @@
 package com.niuqu.chatbubble;
 
 import net.minecraft.client.font.TextRenderer;
+import net.minecraft.client.gui.widget.TextFieldWidget;
 //#if MC >= 12000
 import net.minecraft.client.gui.DrawContext;
 //#else
 //$$ import net.minecraft.client.util.math.MatrixStack;
 //#endif
+import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.MathHelper;
 import com.niuqu.chatbubble.texture.ColoredTextureRenderer;
@@ -16,9 +18,10 @@ public class ChatEmojiPanel {
     private static final int COLS = 9;
     private static final int SLOT = 18;
     private static final int KAO_ITEM_H = 13;
-    private static final int CRAFT_ITEM_H = 18;
     private static final int KAO_COLS = 2;
     private static final int KAO_COL_W = 90;
+    /** Solo CE glyphs drawn at this size; mixed text stays on the font line. */
+    private static final int SOLO_PX = 28;
 
     // 面板宽度自适应：聊天面板按固定物理宽设计（6x 时 panelW 收缩到 ~166），
     // 表情面板若固定 170 逻辑宽会反超面板 → clamp 边界反转 → 溢出屏幕左边。
@@ -85,13 +88,103 @@ public class ChatEmojiPanel {
 
     private record CraftEmoji(String keyword, Text preview) {}
     private static volatile java.util.List<CraftEmoji> craftEmojis = java.util.List.of();
+    private static volatile java.util.Map<Integer, String> craftKeywords = java.util.Map.of();
+    private static volatile java.util.Map<Integer, Style> craftStyles = java.util.Map.of();
+    private static volatile java.util.Map<String, String> craftSymbols = java.util.Map.of();
+
+    public static Style craftStyle(int codepoint) { return craftStyles.get(codepoint); }
+
+    /** Scale for a message that is only CE glyphs. Zero keeps the normal bubble size. */
+    public static float soloScale(Text text, int fontHeight) {
+        if (fontHeight <= 0 || !craftOnly(text)) return 0f;
+        float scale = SOLO_PX / (float) fontHeight;
+        return scale > 1.05f ? scale : 0f;
+    }
+
+    public static String outgoing(String text) {
+        if (text == null || text.isEmpty() || craftKeywords.isEmpty()) return text;
+        StringBuilder out = new StringBuilder(text.length());
+        for (int i = 0; i < text.length();) {
+            int cp = text.codePointAt(i);
+            int count = Character.charCount(cp);
+            String keyword = craftKeywords.get(cp);
+            if (keyword != null) out.append(keyword);
+            else out.append(text, i, i + count);
+            i += count;
+        }
+        return out.toString();
+    }
+
+    /** Shortcodes back into the single glyph the input box shows. */
+    public static String glyphs(String text) {
+        if (text == null || text.isEmpty() || craftSymbols.isEmpty() || text.indexOf(':') < 0) return text;
+        StringBuilder out = new StringBuilder(text.length());
+        int i = 0;
+        while (i < text.length()) {
+            if (text.charAt(i) == ':') {
+                int close = text.indexOf(':', i + 1);
+                if (close > i) {
+                    String symbol = craftSymbols.get(text.substring(i, close + 1));
+                    if (symbol != null) {
+                        out.append(symbol);
+                        i = close + 1;
+                        continue;
+                    }
+                }
+            }
+            out.append(text.charAt(i));
+            i++;
+        }
+        return out.toString();
+    }
+
+    /** Turn a finished :shortcode: into its glyph, the same way a grid click does. */
+    public static boolean replaceIn(TextFieldWidget field) {
+        if (field == null || craftSymbols.isEmpty()) return false;
+        String text = field.getText();
+        if (text == null || text.indexOf(':') < 0 || text.startsWith("/")) return false;
+        String next = glyphs(text);
+        if (next.equals(text)) return false;
+        field.setText(next);
+        //#if MC >= 12004
+        field.setCursorToEnd(false);
+        //#else
+        //$$ field.setCursorToEnd();
+        //#endif
+        return true;
+    }
+
+    private static boolean craftOnly(Text text) {
+        if (text == null || craftKeywords.isEmpty()) return false;
+        String value = text.getString();
+        if (value.isBlank()) return false;
+        boolean any = false;
+        for (int i = 0; i < value.length();) {
+            int cp = value.codePointAt(i);
+            i += Character.charCount(cp);
+            if (Character.isWhitespace(cp)) continue;
+            if (!craftKeywords.containsKey(cp)) return false;
+            any = true;
+        }
+        return any;
+    }
+
+    private static void clearCraft() {
+        craftEmojis = java.util.List.of();
+        craftKeywords = java.util.Map.of();
+        craftStyles = java.util.Map.of();
+        craftSymbols = java.util.Map.of();
+    }
 
     public static void setCraftEmojis(String encoded) {
         if (encoded == null || encoded.isEmpty()) {
-            craftEmojis = java.util.List.of();
+            clearCraft();
             return;
         }
         java.util.LinkedHashMap<String, CraftEmoji> parsed = new java.util.LinkedHashMap<>();
+        java.util.HashMap<Integer, String> keywords = new java.util.HashMap<>();
+        java.util.HashMap<Integer, Style> styles = new java.util.HashMap<>();
+        java.util.HashMap<String, String> symbols = new java.util.HashMap<>();
         for (String line : encoded.split("\n")) {
             int tab = line.indexOf('\t');
             String keyword = tab < 0 ? line : line.substring(0, tab);
@@ -99,9 +192,37 @@ public class ChatEmojiPanel {
             Text preview = tab < 0 ? null
                 : ChatMessageStore.componentFromJson(line.substring(tab + 1));
             parsed.put(keyword, new CraftEmoji(keyword, preview));
+            rememberCraft(keyword, preview, keywords, styles, symbols);
             if (parsed.size() >= 512) break;
         }
         craftEmojis = java.util.List.copyOf(parsed.values());
+        craftKeywords = java.util.Map.copyOf(keywords);
+        craftStyles = java.util.Map.copyOf(styles);
+        craftSymbols = java.util.Map.copyOf(symbols);
+    }
+
+    private static void rememberCraft(String keyword, Text preview,
+            java.util.Map<Integer, String> keywords, java.util.Map<Integer, Style> styles,
+            java.util.Map<String, String> symbols) {
+        if (preview == null) return;
+        String shown = preview.getString();
+        if (shown == null || shown.isEmpty() || shown.equals(keyword)) return;
+        int cp = shown.codePointAt(0);
+        if (shown.length() != Character.charCount(cp)) return;
+        Style[] holder = new Style[1];
+        preview.visit((style, part) -> {
+            if (holder[0] == null && part != null && !part.isEmpty()) holder[0] = style;
+            return java.util.Optional.empty();
+        }, Style.EMPTY);
+        if (holder[0] == null) return;
+        keywords.put(cp, keyword);
+        styles.put(cp, holder[0]);
+        symbols.put(keyword, shown);
+    }
+
+    private static String craftToken(CraftEmoji entry) {
+        String symbol = craftSymbols.get(entry.keyword());
+        return symbol != null ? symbol : entry.keyword();
     }
 
     boolean visible;
@@ -115,7 +236,7 @@ public class ChatEmojiPanel {
         int a255 = (int) (255 * alpha);
         int sendX = panelX + panelW - pad - iconS + 2;
 
-        boolean isKaomoji = tab == 1 || tab == 2;
+        boolean isKaomoji = tab == 1;
         int pw = fitWidth(isKaomoji ? KAO_COLS * KAO_COL_W + 8 : COLS * SLOT + 8, panelW);
         int px = clampX(sendX + iconS / 2 - pw / 2, pw, panelX, panelW);
         int py = Math.max(2, barTop - PANEL_H - 4);
@@ -159,7 +280,7 @@ public class ChatEmojiPanel {
         RenderHelper.fill(g, px + pw - 1, py + 1, px + pw, py + PANEL_H - 1, divA);
 
         if (tab == 2) {
-            renderCraftList(g, mouseX, mouseY, font, c, px, cy, pw, ch, alpha);
+            renderCraftGrid(g, mouseX, mouseY, font, c, px, cy, pw, ch, gridCols(pw), alpha);
         } else if (isKaomoji) {
             renderKaomojiList(g, mouseX, mouseY, font, c, px, cy, pw, ch, alpha);
         } else {
@@ -167,31 +288,40 @@ public class ChatEmojiPanel {
         }
     }
 
-    private void renderCraftList(Object g, int mouseX, int mouseY,
+    private void renderCraftGrid(Object g, int mouseX, int mouseY,
             TextRenderer font, ChatBubbleTheme.Colors c,
-            int px, int cy, int pw, int ch, float alpha) {
-        int colW = (pw - 8) / 2;
-        int max = Math.max(0, ((craftEmojis.size() + 1) / 2) * CRAFT_ITEM_H + 8 - ch);
-        scroll = MathHelper.clamp(scroll, 0, max);
+            int px, int cy, int pw, int ch, int cols, float alpha) {
+        int a255 = (int) (255 * alpha);
+        int rows = (craftEmojis.size() + cols - 1) / cols;
+        int maxScroll = Math.max(0, rows * SLOT + 4 - ch + 4);
+        scroll = MathHelper.clamp(scroll, 0, maxScroll);
         RenderHelper.enableScissor(g, px + 1, cy + 1, px + pw - 1, cy + ch - 1);
+        int sy = cy + 2 - scroll;
+        int box = SLOT - 4;
         for (int i = 0; i < craftEmojis.size(); i++) {
-            int x = px + 4 + i % 2 * colW;
-            int y = cy + 2 + i / 2 * CRAFT_ITEM_H - scroll;
-            if (y + CRAFT_ITEM_H <= cy || y >= cy + ch) continue;
-            if (mouseX >= x && mouseX < x + colW && mouseY >= y && mouseY < y + CRAFT_ITEM_H)
+            int col = i % cols;
+            int row = i / cols;
+            int ex = px + 4 + col * SLOT;
+            int ey = sy + row * SLOT;
+            if (ey + SLOT <= cy || ey >= cy + ch) continue;
+            if (mouseX >= ex && mouseX <= ex + SLOT - 1
+                && mouseY >= ey && mouseY <= ey + SLOT - 1)
                 ColoredTextureRenderer.drawWithAlpha(g,
                     com.niuqu.chatbubble.texture.UiTextureManager.rl(com.niuqu.chatbubble.texture.UiElement.HOVER_BG),
-                    x, y, colW, CRAFT_ITEM_H, alpha);
+                    ex, ey, SLOT - 1, SLOT - 1, alpha);
             CraftEmoji entry = craftEmojis.get(i);
-            int labelX = x + 2;
-            if (entry.preview() != null && !entry.preview().getString().equals(entry.keyword())) {
-                RenderHelper.drawText(g, font, entry.preview(), x + 2, y + 1,
-                    ChatBubbleTheme.alphaBlend(c.textPrimary(), (int) (255 * alpha)), false);
-                labelX += Math.min(14, font.getWidth(entry.preview()) + 3);
-            }
-            String label = font.trimToWidth(entry.keyword(), Math.max(4, x + colW - labelX - 2));
-            RenderHelper.drawText(g, font, label, labelX, y + 2,
-                ChatBubbleTheme.alphaBlend(c.textPrimary(), (int) (255 * alpha)), false);
+            if (entry.preview() == null || entry.preview().getString().equals(entry.keyword())) continue;
+            int gw = Math.max(1, font.getWidth(entry.preview()));
+            int gh = Math.max(1, font.fontHeight);
+            float scale = Math.min(box / (float) gw, box / (float) gh);
+            float dw = gw * scale;
+            float dh = gh * scale;
+            RenderHelper.pushMatrix(g);
+            RenderHelper.translate(g, ex + 2 + (box - dw) / 2f, ey + 2 + (box - dh) / 2f);
+            RenderHelper.scale(g, scale, scale, 1f);
+            RenderHelper.drawText(g, font, entry.preview(), 0, 0,
+                ChatBubbleTheme.alphaBlend(0xFFFFFFFF, a255), false);
+            RenderHelper.popMatrix(g);
         }
         RenderHelper.disableScissor(g);
     }
@@ -267,7 +397,7 @@ public class ChatEmojiPanel {
             return "";
         }
 
-        boolean isKaomoji = tab == 1 || tab == 2;
+        boolean isKaomoji = tab == 1;
         int pw = fitWidth(isKaomoji ? KAO_COLS * KAO_COL_W + 8 : COLS * SLOT + 8, panelW);
         int px = clampX(sendX + iconS / 2 - pw / 2, pw, panelX, panelW);
         int py = Math.max(2, barTop - PANEL_H - 4);
@@ -287,11 +417,12 @@ public class ChatEmojiPanel {
 
         int cy = py + TAB_H + 1;
         if (tab == 2) {
-            int cw = (pw - 8) / 2;
-            int col = (mx - px - 4) / cw;
-            int row = (my - cy - 2 + scroll) / CRAFT_ITEM_H;
-            int idx = row * 2 + col;
-            if (col >= 0 && col < 2 && idx >= 0 && idx < craftEmojis.size()) return craftEmojis.get(idx).keyword();
+            int cols = gridCols(pw);
+            int col = (mx - px - 4) / SLOT;
+            int row = (my - cy - 2 + scroll) / SLOT;
+            int idx = row * cols + col;
+            if (col >= 0 && col < cols && idx >= 0 && idx < craftEmojis.size())
+                return craftToken(craftEmojis.get(idx));
         } else if (isKaomoji) {
             int cw = (pw - 8) / KAO_COLS;
             int col = (mx - px - 4) / cw;
@@ -312,7 +443,8 @@ public class ChatEmojiPanel {
         boolean isKaomoji = tab == 1;
         int totalH;
         if (tab == 2) {
-            totalH = ((craftEmojis.size() + 1) / 2) * CRAFT_ITEM_H + 4;
+            int rows = (craftEmojis.size() + COLS - 1) / COLS;
+            totalH = rows * SLOT + 4;
         } else if (isKaomoji) {
             totalH = ((KAO.length + KAO_COLS - 1) / KAO_COLS) * KAO_ITEM_H + 4;
         } else {

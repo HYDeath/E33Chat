@@ -577,12 +577,13 @@ public class ChatBubbleScreen extends ChatScreen {
         // ModernUI hooks vanilla ChatScreen.onEdited; E33Chat installs its own
         // responder, so mirror the shortcode transformation here when ModernUI
         // is installed and has the feature enabled.
-        if (!emojiReplacing && ModernUIEmojiCompat.isEnabled() && !text.startsWith("/")) {
+        if (!emojiReplacing && !text.startsWith("/")) {
             emojiReplacing = true;
             try {
-                if (ModernUIEmojiCompat.replaceIn(chatField)) {
+                if (ModernUIEmojiCompat.isEnabled() && ModernUIEmojiCompat.replaceIn(chatField)) {
                     return; // reentrant onInputEdited already did post-processing
                 }
+                if (com.niuqu.chatbubble.ui.ChatEmojiPanel.replaceIn(chatField)) return;
             } finally {
                 emojiReplacing = false;
             }
@@ -2120,7 +2121,10 @@ public class ChatBubbleScreen extends ChatScreen {
                 msgHeightCache.put(msg, h);
                 return h;
             }
-            if (msg.isOwn() && msg.replyContent() == null && NameplateBubbleScreen.hasSelectedSkin()) {
+            if (msg.isOwn() && msg.replyContent() == null
+                    && com.niuqu.chatbubble.ui.ChatEmojiPanel.soloScale(
+                        parsed.textWithoutImages(), textRenderer.fontHeight) == 0f
+                    && NameplateBubbleScreen.hasSelectedSkin()) {
                 List<OrderedText> frameLines = wrapContent(parsed.textWithoutImages(), Math.max(16, bubbleMaxW - 24));
                 NameplateBubbleSkin frameSkin = NameplateBubbleScreen.selectedSkin(frameLines.size());
                 int textW = 0;
@@ -2132,8 +2136,12 @@ public class ChatBubbleScreen extends ChatScreen {
                     return h;
                 }
             }
-            float s = Appearance.bubbleScale(textRenderer.fontHeight);
-            List<OrderedText> lines = wrapContent(parsed.textWithoutImages(), Appearance.bubbleWrapWidth(bubbleMaxW, textRenderer.fontHeight));
+            Text visible = parsed.textWithoutImages();
+            float craft = com.niuqu.chatbubble.ui.ChatEmojiPanel.soloScale(visible, textRenderer.fontHeight);
+            float s = craft > 0f ? craft : Appearance.bubbleScale(textRenderer.fontHeight);
+            int wrapW = craft > 0f ? Math.max(16, (int) (bubbleMaxW / craft))
+                : Appearance.bubbleWrapWidth(bubbleMaxW, textRenderer.fontHeight);
+            List<OrderedText> lines = wrapContent(visible, wrapW);
             double contentH = lines.size() * textRenderer.fontHeight + BUBBLE_PAD_Y * 2;
             if (msg.replyContent() != null) contentH += textRenderer.fontHeight + 7;
             h = NAME_H + (int) (contentH * s);
@@ -2246,11 +2254,14 @@ public class ChatBubbleScreen extends ChatScreen {
 
         // Bubble path only: re-wrap at the scaled width so bigger bubbles fit fewer
         // characters per line (bubble-less emote/image paths above keep the unscaled lines).
-        boolean skinEligible = own && msg.replyContent() == null && NameplateBubbleScreen.hasSelectedSkin();
-        float s = skinEligible ? 1f : Appearance.bubbleScale(textRenderer.fontHeight);
-        lines = wrapContent(parsed.textWithoutImages(), skinEligible
-            ? Math.max(16, bubbleMaxW - 24)
-            : Appearance.bubbleWrapWidth(bubbleMaxW, textRenderer.fontHeight));
+        Text visible = parsed.textWithoutImages();
+        float craft = com.niuqu.chatbubble.ui.ChatEmojiPanel.soloScale(visible, textRenderer.fontHeight);
+        boolean skinEligible = craft == 0f && own && msg.replyContent() == null && NameplateBubbleScreen.hasSelectedSkin();
+        float s = craft > 0f ? craft : (skinEligible ? 1f : Appearance.bubbleScale(textRenderer.fontHeight));
+        int wrapW = craft > 0f ? Math.max(16, (int) (bubbleMaxW / craft))
+            : skinEligible ? Math.max(16, bubbleMaxW - 24)
+            : Appearance.bubbleWrapWidth(bubbleMaxW, textRenderer.fontHeight);
+        lines = wrapContent(visible, wrapW);
         int textW = 0;
         for (var line : lines) textW = Math.max(textW, textRenderer.getWidth(line));
         NameplateBubbleSkin frameSkin = skinEligible ? NameplateBubbleScreen.selectedSkin(lines.size()) : null;
@@ -3252,7 +3263,7 @@ public class ChatBubbleScreen extends ChatScreen {
     }
 
     private void sendMessage() {
-        String raw = chatField.getText().trim();
+        String raw = com.niuqu.chatbubble.ui.ChatEmojiPanel.outgoing(chatField.getText()).trim();
         if (raw.isEmpty()) return;
         if (raw.contains("[[CICode,url=file://")) {
             //#if MC >= 26000
@@ -3347,7 +3358,8 @@ public class ChatBubbleScreen extends ChatScreen {
 
         ChatMessageStore.debugLog("[e33chat] Send | cmd='" + text + "' | display='" + displayText + "' | whisperTarget=" + whisperTarget + " | localBubble=" + localBubble);
         if (localBubble) {
-            Text contentForSend = cfg != null && cfg.colorCodes() ? parseColorCodes(displayText) : Text.literal(displayText);
+            String shown = com.niuqu.chatbubble.ui.ChatEmojiPanel.glyphs(displayText);
+            Text contentForSend = cfg != null && cfg.colorCodes() ? parseColorCodes(shown) : Text.literal(shown);
             // 2.3.10+: keep image bracket codes raw so the local bubble renders
             // the picture natively (BracketCodec + ImageLoader); the vanilla chat
             // echo is converted by ChatImage's own mixins when installed.
