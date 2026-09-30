@@ -930,6 +930,23 @@ public class ChatBubbleScreen extends ChatScreen {
         return mouseClicked(event.x(), event.y(), event.button());
     }
 
+    /** 26.3 numbers mouse buttons from 1 (left=1, right=3). Earlier versions use GLFW 0 and 1. */
+    private static boolean primaryClick(int button) {
+        //#if MC >= 260300
+        //$$ return button == 1;
+        //#else
+        return button == 0;
+        //#endif
+    }
+
+    private static boolean secondaryClick(int button) {
+        //#if MC >= 260300
+        //$$ return button == 3;
+        //#else
+        return button == 1;
+        //#endif
+    }
+
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         // Panel contents are translated by panelOffset during the open/close slide;
         // undo the shift here so hit-testing matches what is drawn. The sidebar and
@@ -939,7 +956,7 @@ public class ChatBubbleScreen extends ChatScreen {
         if (isPanelSliding()) mouseX -= currentPanelOffset();
 
         // @mention popup click
-        if (showMentions && button == 0) {
+        if (showMentions && primaryClick(button)) {
             int popupX = chatField.getX();
             int popupH = Math.min(mentionCandidates.size(), 8) * textRenderer.fontHeight + 4;
             int popupY = chatField.getY() - popupH - 2;
@@ -960,13 +977,13 @@ public class ChatBubbleScreen extends ChatScreen {
 
         // Sidebar clicks
         int sidebarX = getSidebarScreenX();
-        if ((sidebarOpen || sidebarAnimating) && button == 0 && origX >= sidebarX && origX <= sidebarX + SIDEBAR_W) {
+        if ((sidebarOpen || sidebarAnimating) && primaryClick(button) && origX >= sidebarX && origX <= sidebarX + SIDEBAR_W) {
             int searchY = 2;
             int searchH = SIDEBAR_SEARCH_H;
             if (mouseY >= searchY && mouseY <= searchY + searchH) {
                 boolean handled = com.niuqu.chatbubble.UiCompat.click(sidebarSearchBox, origX, mouseY, button);
                 setFocused(sidebarSearchBox); chatField.setFocused(false);
-                if (handled && button == 0) {
+                if (handled && primaryClick(button)) {
                     setDragging(true);
                     inputDragTarget = sidebarSearchBox;
                     inputDragAnchor = inputDragTarget.getCursor();
@@ -999,13 +1016,13 @@ public class ChatBubbleScreen extends ChatScreen {
             }
         }
 
-        if (button == 0 && contextAvatarIndex >= 0) { handleAvatarContextClick((int) mouseX, (int) mouseY); return true; }
+        if (primaryClick(button) && contextAvatarIndex >= 0) { handleAvatarContextClick((int) mouseX, (int) mouseY); return true; }
         if (contextAvatarIndex >= 0) { contextAvatarIndex = -1; return true; }
-        if (button == 0 && contextMsgIndex >= 0) { handleContextClick((int) mouseX, (int) mouseY); return true; }
+        if (primaryClick(button) && contextMsgIndex >= 0) { handleContextClick((int) mouseX, (int) mouseY); return true; }
         if (contextMsgIndex >= 0) { contextMsgIndex = -1; return true; }
 
         // Notification bar clicks
-        if (button == 0 && newMessageCount > 0) {
+        if (primaryClick(button) && newMessageCount > 0) {
             if (mouseX >= notifCountLeft && mouseX <= notifCountRight
                 && mouseY >= notifBarTextY && mouseY <= notifBarTextY + textRenderer.fontHeight) {
                 scrollToBottom = true; newMessageCount = 0; hasNewMentionOrQuote = false;
@@ -1018,12 +1035,12 @@ public class ChatBubbleScreen extends ChatScreen {
             }
         }
 
-        if (button == 0 && replyTargetIndex >= 0 && isMouseOverReplyCancel(mouseX, mouseY)) {
+        if (primaryClick(button) && replyTargetIndex >= 0 && isMouseOverReplyCancel(mouseX, mouseY)) {
             replyTargetIndex = -1; return true;
         }
 
         // Scrollbar interaction
-        if (button == 0 && maxScroll > 0) {
+        if (primaryClick(button) && maxScroll > 0) {
             if (textSelection.hasSelection()) textSelection.clear();
             int trackX = panelX + panelW - SCROLLBAR_WIDTH;
             int effBottom = newMessageCount > 0 ? barTop - NOTIF_H - 1 : msgBottom;
@@ -1056,7 +1073,7 @@ public class ChatBubbleScreen extends ChatScreen {
         if (commandSuggestions != null && commandSuggestions.mouseClicked(com.niuqu.chatbubble.UiCompat.mouse(mouseX, mouseY, button)))
             return true;
 
-        if (button == 0) {
+        if (primaryClick(button)) {
             if (isMouseOverHamburger(mouseX, mouseY)) {
                 if (!ChatBubbleClientSetup.config().animationEnabled()) {
                     sidebarOpen = !sidebarOpen; sidebarAnimating = false;
@@ -1103,7 +1120,7 @@ public class ChatBubbleScreen extends ChatScreen {
                     setFocused(quickChatInput);
                     chatField.setFocused(false);
                     boolean handled = com.niuqu.chatbubble.UiCompat.click(quickChatInput, mouseX, mouseY, button);
-                    if (handled && button == 0) {
+                    if (handled && primaryClick(button)) {
                         setDragging(true);
                         inputDragTarget = quickChatInput;
                         inputDragAnchor = inputDragTarget.getCursor();
@@ -1123,7 +1140,7 @@ public class ChatBubbleScreen extends ChatScreen {
                 if (searchPanel.isClickOnPanel((int) mouseX, (int) mouseY, panelX, panelW, barTop)) {
                     boolean handled = com.niuqu.chatbubble.UiCompat.click(searchInput, mouseX, mouseY, button);
                     setFocused(searchInput);
-                    if (handled && button == 0) {
+                    if (handled && primaryClick(button)) {
                         setDragging(true);
                         inputDragTarget = searchInput;
                         inputDragAnchor = inputDragTarget.getCursor();
@@ -1162,7 +1179,7 @@ public class ChatBubbleScreen extends ChatScreen {
         // Text selection: a drag selects text; a simple click on text starts a
         // selection and is deferred to mouseReleased so the old immediate
         // clickable-style handling only remains for non-text spans (images/emotes).
-        if (button == 0) {
+        if (primaryClick(button)) {
             TextSpan hit = findTextSpanAt(mouseX, mouseY);
             if (hit != null) {
                 if (textSelection.hasSelection()) textSelection.clear();
@@ -1178,7 +1195,7 @@ public class ChatBubbleScreen extends ChatScreen {
         }
 
         // Clickable text
-        if (button == 0) {
+        if (primaryClick(button)) {
             Style style = getHoveredStyle(mouseX, mouseY);
             if (style != null && style.getClickEvent() != null) {
                 ClickEvent click = style.getClickEvent();
@@ -1204,7 +1221,7 @@ public class ChatBubbleScreen extends ChatScreen {
         }
 
         // 2.4.10: 群组页签点击（弹层打开时不吃页签点击）
-        if (button == 0 && !groupBrowser.visible) {
+        if (primaryClick(button) && !groupBrowser.visible) {
             String hitTab = hitTestTabStrip(mouseX, mouseY);
             if (hitTab != null) {
                 if (hitTab.equals("+")) {
@@ -1226,7 +1243,7 @@ public class ChatBubbleScreen extends ChatScreen {
         }
 
         // Avatar click for @mention
-        if (button == 0) {
+        if (primaryClick(button)) {
             for (int[] r : bubbleRects) {
                 ChatMessageStore.ChatMessage msg = ChatMessageStore.getMessageAt(r[4]);
                 if (msg == null || msg.isSystem() || !avatarVisibleAt(r[4])) continue;
@@ -1244,7 +1261,7 @@ public class ChatBubbleScreen extends ChatScreen {
         }
 
         // Avatar right-click context menu
-        if (button == 1) {
+        if (secondaryClick(button)) {
             for (int[] r : bubbleRects) {
                 ChatMessageStore.ChatMessage msg = ChatMessageStore.getMessageAt(r[4]);
                 if (msg == null || msg.isSystem() || msg.isOwn()) continue;
@@ -1261,7 +1278,7 @@ public class ChatBubbleScreen extends ChatScreen {
         }
 
         // Bubble right-click
-        if (button == 1) {
+        if (secondaryClick(button)) {
             for (int[] r : bubbleRects) {
                 if (mouseX >= r[0] && mouseX <= r[0] + r[2]
                     && mouseY >= r[1] && mouseY <= r[1] + r[3]) {
@@ -1277,7 +1294,7 @@ public class ChatBubbleScreen extends ChatScreen {
             // We bypass Screen.mouseClicked -> super.mouseClicked, so the container
             // drag state is never set automatically. Without it, mouseDragged won't
             // reach the text field and selection (needed for Ctrl+C) is broken.
-            if (button == 0) {
+            if (primaryClick(button)) {
                 setDragging(true);
                 inputDragTarget = this.chatField;
                 inputDragAnchor = inputDragTarget.getCursor();
@@ -1325,7 +1342,7 @@ public class ChatBubbleScreen extends ChatScreen {
             }
             return true;
         }
-        if (inputDragTarget != null && button == 0) {
+        if (inputDragTarget != null && primaryClick(button)) {
             double mx = mouseX;
             if ((inputDragTarget == quickChatInput || inputDragTarget == searchInput)
                 && isPanelSliding()) {
