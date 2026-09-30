@@ -766,12 +766,7 @@ public class ChatBubbleScreen extends ChatScreen {
 
     @Override
     public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
-        return keyPressed(event.input(), event.scancode(), event.modifiers());
-    }
-
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_C && (modifiers & 0x2) != 0
-            && textSelection.hasSelection()) {
+        if (event.isCopy() && textSelection.hasSelection()) {
             String copied = textSelection.copyText(textSpans);
             if (!copied.isEmpty()) {
                 client.keyboard.setClipboard(copied);
@@ -779,16 +774,16 @@ public class ChatBubbleScreen extends ChatScreen {
             }
             return true;
         }
-        if (settingsMenu.visible && keyCode == 256) {
+        if (settingsMenu.visible && event.isEscape()) {
             settingsMenu.resetClearArmed();
             beginPopupClose(s -> settingsCloseStart = s, () -> settingsMenu.visible = false);
             return true;
         }
-        if (emojiPanel.visible && keyCode == 256) {
+        if (emojiPanel.visible && event.isEscape()) {
             beginPopupClose(s -> emojiCloseStart = s, () -> emojiPanel.visible = false);
             return true;
         }
-        if (quickChatPanel.visible && keyCode == 256) {
+        if (quickChatPanel.visible && event.isEscape()) {
             beginPopupClose(s -> quickCloseStart = s, () -> {
                 quickChatPanel.visible = false;
                 quickChatInput.setVisible(false);
@@ -796,45 +791,45 @@ public class ChatBubbleScreen extends ChatScreen {
             setFocused(chatField);
             return true;
         }
-        if (searchPanel.visible && keyCode == 256) { closeSearchPanel(); return true; }
-        if (groupBrowser.visible && keyCode == 256) { closeGroupBrowser(); return true; }
+        if (searchPanel.visible && event.isEscape()) { closeSearchPanel(); return true; }
+        if (groupBrowser.visible && event.isEscape()) { closeGroupBrowser(); return true; }
 
         if (searchPanel.visible && !searchMatches.isEmpty()) {
-            if (keyCode == 265) {
+            if (event.isUp()) {
                 searchMatchIdx = searchMatchIdx > 0 ? searchMatchIdx - 1 : searchMatches.size() - 1;
                 searchHighlightIndex = searchMatches.get(searchMatchIdx);
                 jumpToMessage(searchHighlightIndex); return true;
             }
-            if (keyCode == 264) {
+            if (event.isDown()) {
                 searchMatchIdx = searchMatchIdx < searchMatches.size() - 1 ? searchMatchIdx + 1 : 0;
                 searchHighlightIndex = searchMatches.get(searchMatchIdx);
                 jumpToMessage(searchHighlightIndex); return true;
             }
-            if (keyCode == 257 || keyCode == 335) { closeSearchPanel(); return true; }
+            if (event.isConfirmation()) { closeSearchPanel(); return true; }
         }
 
         if (sidebarSearchBox.isFocused()) {
-            if (keyCode == 256 || keyCode == 257 || keyCode == 335) {
+            if (event.isEscape() || event.isConfirmation()) {
                 sidebarSearchBox.setFocused(false); setFocused(chatField); return true;
             }
         }
 
         if (showMentions) {
-            if (keyCode == 258) { insertMention(mentionCandidates.get(mentionIdx)); return true; }
-            if (keyCode == 256) { showMentions = false; mentionNavigated = false; return true; }
-            if (keyCode == 265) { mentionIdx = mentionIdx > 0 ? mentionIdx - 1 : mentionCandidates.size() - 1; mentionNavigated = true; return true; }
-            if (keyCode == 264) { mentionIdx = mentionIdx < mentionCandidates.size() - 1 ? mentionIdx + 1 : 0; mentionNavigated = true; return true; }
-            if (keyCode == 257 || keyCode == 335) {
+            if (event.isCycleFocus()) { insertMention(mentionCandidates.get(mentionIdx)); return true; }
+            if (event.isEscape()) { showMentions = false; mentionNavigated = false; return true; }
+            if (event.isUp()) { mentionIdx = mentionIdx > 0 ? mentionIdx - 1 : mentionCandidates.size() - 1; mentionNavigated = true; return true; }
+            if (event.isDown()) { mentionIdx = mentionIdx < mentionCandidates.size() - 1 ? mentionIdx + 1 : 0; mentionNavigated = true; return true; }
+            if (event.isConfirmation()) {
                 // Only apply the highlighted candidate when the player actually
                 // navigated it (arrow keys); otherwise Enter just sends the text.
                 if (mentionNavigated) { insertMention(mentionCandidates.get(mentionIdx)); return true; }
             }
         }
 
-        if (commandSuggestions != null && commandSuggestions.keyPressed(new net.minecraft.client.input.KeyEvent(keyCode, scanCode, modifiers)))
+        if (commandSuggestions != null && commandSuggestions.keyPressed(event))
             return true;
-        if (keyCode == 256) { onClose(); return true; }
-        if (groupCreateInput != null && groupCreateInput.isFocused() && (keyCode == 257 || keyCode == 335)) {
+        if (event.isEscape()) { onClose(); return true; }
+        if (groupCreateInput != null && groupCreateInput.isFocused() && event.isConfirmation()) {
             String name = groupCreateInput.getText().trim();
             if (!name.isEmpty()) {
                 groupCreateInput.setText("");
@@ -846,7 +841,7 @@ public class ChatBubbleScreen extends ChatScreen {
             }
             return true;
         }
-        if (quickChatInput.isFocused() && (keyCode == 257 || keyCode == 335)) {
+        if (quickChatInput.isFocused() && event.isConfirmation()) {
             String text = quickChatInput.getText().trim();
             if (!text.isEmpty()) {
                 var phrases = new ArrayList<>(ChatBubbleClientSetup.config().quickChatPhrases());
@@ -856,25 +851,23 @@ public class ChatBubbleScreen extends ChatScreen {
             }
             return true;
         }
-        if (keyCode == 257 || keyCode == 335) {
+        if (event.isConfirmation()) {
             sendMessage(); return true;
         }
-        if (keyCode == 265 && this.getFocused() == chatField) { setChatFromHistory(-1); return true; }
-        if (keyCode == 264 && this.getFocused() == chatField) { setChatFromHistory(1); return true; }
+        if (event.isUp() && this.getFocused() == chatField) { setChatFromHistory(-1); return true; }
+        if (event.isDown() && this.getFocused() == chatField) { setChatFromHistory(1); return true; }
 
-        // 不调 super.keyPressed（= ChatScreen，内部访问 package-private chatInputSuggestor = null → NPE）。
-        // self 实现 Screen.keyPressed 等价分发：先给 focused widget（chatField TextFieldWidget 处理
-        // backspace/删除/左右/Home/End/Ctrl+A/C/V/X），再 Tab/箭头焦点导航。
-        if (this.getFocused() != null && this.getFocused().keyPressed(new net.minecraft.client.input.KeyEvent(keyCode, scanCode, modifiers)))
+        // Pass the original event through. 26.3 stores the edit shortcut in a
+        // different field from the GLFW key, so rebuilding the event drops backspace.
+        if (this.getFocused() != null && this.getFocused().keyPressed(event))
             return true;
-        net.minecraft.client.gui.navigation.GuiNavigation nav = switch (keyCode) {
-            case 258 -> new net.minecraft.client.gui.navigation.GuiNavigation.Tab(!Screen.hasShiftDown());
-            case 262 -> new net.minecraft.client.gui.navigation.GuiNavigation.Arrow(net.minecraft.client.gui.navigation.NavigationDirection.RIGHT);
-            case 263 -> new net.minecraft.client.gui.navigation.GuiNavigation.Arrow(net.minecraft.client.gui.navigation.NavigationDirection.LEFT);
-            case 264 -> new net.minecraft.client.gui.navigation.GuiNavigation.Arrow(net.minecraft.client.gui.navigation.NavigationDirection.DOWN);
-            case 265 -> new net.minecraft.client.gui.navigation.GuiNavigation.Arrow(net.minecraft.client.gui.navigation.NavigationDirection.UP);
-            default -> null;
-        };
+        net.minecraft.client.gui.navigation.GuiNavigation nav =
+            event.isCycleFocus() ? new net.minecraft.client.gui.navigation.GuiNavigation.Tab(!event.hasShiftDown())
+            : event.isRight() ? new net.minecraft.client.gui.navigation.GuiNavigation.Arrow(net.minecraft.client.gui.navigation.NavigationDirection.RIGHT)
+            : event.isLeft() ? new net.minecraft.client.gui.navigation.GuiNavigation.Arrow(net.minecraft.client.gui.navigation.NavigationDirection.LEFT)
+            : event.isDown() ? new net.minecraft.client.gui.navigation.GuiNavigation.Arrow(net.minecraft.client.gui.navigation.NavigationDirection.DOWN)
+            : event.isUp() ? new net.minecraft.client.gui.navigation.GuiNavigation.Arrow(net.minecraft.client.gui.navigation.NavigationDirection.UP)
+            : null;
         if (nav != null) {
             net.minecraft.client.gui.navigation.GuiNavigationPath path = super.getNavigationPath(nav);
             if (path == null && nav instanceof net.minecraft.client.gui.navigation.GuiNavigation.Tab) {

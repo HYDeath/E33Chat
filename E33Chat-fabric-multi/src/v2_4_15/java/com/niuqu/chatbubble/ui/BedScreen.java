@@ -42,19 +42,15 @@ public class BedScreen extends Screen {
 
     @Override
     public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
-        return keyPressed(event.input(), event.scancode(), event.modifiers());
-    }
-
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
+        if (event.isEscape()) {
             sendWakeUp();
             return true;
         }
-        if (client.options.chatKey.matches(new net.minecraft.client.input.KeyEvent(keyCode, scanCode, modifiers))) {
+        if (client.options.chatKey.matches(event)) {
             client.setScreen(new ChatBubbleScreen(""));
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override
