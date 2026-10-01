@@ -186,11 +186,11 @@ public final class ChatItemCards {
 
     private static Card card(Style style) {
         if (style == null) return null;
-        ItemStack shown = hoverItem(style.getHoverEvent());
+        ItemStack shown = present(hoverItem(style.getHoverEvent()));
         String command = command(style.getClickEvent());
         String kind = declaredKind(style.getInsertion());
         if (kind == null) kind = kind(command);
-        List<ItemStack> slots = slots(style.getInsertion());
+        List<ItemStack> slots = presentSlots(slots(style.getInsertion()));
         if ("shulker".equals(kind) && slots.isEmpty() && shown != null) slots = container(shown);
         if (!"shulker".equals(kind) && !"inv".equals(kind) && !"ender".equals(kind)) slots = List.of();
         int columns = slots.isEmpty() ? 9 : columns(style.getInsertion(), slots);
@@ -298,6 +298,24 @@ public final class ChatItemCards {
             } catch (ReflectiveOperationException ignored) { }
         }
         return null;
+    }
+
+    /** TACZ bridge guns arrive as paper plus GunId. The client mod already rebuilds those in the inventory. */
+    private static ItemStack present(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return stack;
+        try {
+            Class<?> rebuilder = Class.forName("com.tacz.guns.client.util.ProxyGunRebuilder");
+            Object rebuilt = rebuilder.getMethod("tryRebuild", ItemStack.class).invoke(null, stack);
+            if (rebuilt instanceof ItemStack next && !next.isEmpty()) return next;
+        } catch (Throwable ignored) { }
+        return stack;
+    }
+
+    private static List<ItemStack> presentSlots(List<ItemStack> slots) {
+        if (slots == null || slots.isEmpty()) return slots;
+        List<ItemStack> out = new ArrayList<>(slots.size());
+        for (ItemStack slot : slots) out.add(present(slot));
+        return out;
     }
 
     private static ItemStack asStack(Object value) {
