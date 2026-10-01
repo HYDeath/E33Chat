@@ -1749,6 +1749,9 @@ public class ChatBubbleScreen extends ChatScreen {
         //$$ g.getMatrices().translate(0, 0, 50);
         //#endif
         chatField.setX(inputX + panelOffset);
+        int fieldColor = theme() == ChatBubbleTheme.LIGHT ? c().textSecondary() : c().textPrimary();
+        boolean craftInput = ChatEmojiPanel.containsCraft(chatField.getText());
+        chatField.setEditableColor(craftInput ? 0 : fieldColor);
         // 不调 super.render（ChatScreen.render 访问 package-private chatInputSuggestor，
         // 跨包无法初始化）；复制 Screen.render 的 widgets 遍历渲染
         for (net.minecraft.client.gui.Element w : this.children()) {
@@ -1759,6 +1762,18 @@ public class ChatBubbleScreen extends ChatScreen {
                 //$$ d.render(g.getMatrices(), mouseX, mouseY, delta);
                 //#endif
             }
+        }
+        if (craftInput) {
+            //#if MC >= 12000
+            Text shown = ColorEmojiText.decorate(Text.literal(chatField.getText()));
+            int x = chatField.getX();
+            int extra = textRenderer.getWidth(shown) - chatField.getWidth();
+            if (extra > 0) x -= extra;
+            g.enableScissor(chatField.getX(), chatField.getY(),
+                chatField.getX() + chatField.getWidth(), chatField.getY() + chatField.getHeight());
+            g.drawText(textRenderer, shown, x, chatField.getY(), 0xFFFFFFFF, false);
+            g.disableScissor();
+            //#endif
         }
         // Brigadier's list may be wider than the narrow E33 panel. Keep its
         // placement tied to the input, but do not clip the popup itself.

@@ -43,7 +43,7 @@ final class ColorEmojiText {
                     run = next;
                 } else {
                     Style craft = ChatEmojiPanel.craftStyle(cp);
-                    if (craft != null && style.getFont() == null) {
+                    if (craft != null) {
                         if (i > run) result.append(Text.literal(text.substring(run, i)).fillStyle(style));
                         result.append(Text.literal(text.substring(i, next)).fillStyle(craft));
                         run = next;

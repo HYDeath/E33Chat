@@ -1591,10 +1591,23 @@ public class ChatBubbleScreen extends ChatScreen {
         g.getMatrices().push();
         g.getMatrices().translate(0, 0, 50);
         chatField.setX(inputX + panelOffset);
+        int fieldColor = theme() == ChatBubbleTheme.LIGHT ? c().textSecondary() : c().textPrimary();
+        boolean craftInput = com.niuqu.chatbubble.ui.ChatEmojiPanel.containsCraft(chatField.getText());
+        chatField.setEditableColor(craftInput ? 0 : fieldColor);
         // 不调 super.render（ChatScreen.render 访问 package-private chatInputSuggestor，
         // 跨包无法初始化）；复制 Screen.render 的 widgets 遍历渲染
         for (net.minecraft.client.gui.Element w : this.children()) {
             if (w instanceof net.minecraft.client.gui.Drawable d) d.render(g, mouseX, mouseY, delta);
+        }
+        if (craftInput) {
+            Text shown = ColorEmojiText.decorate(Text.literal(chatField.getText()));
+            int x = chatField.getX();
+            int extra = textRenderer.getWidth(shown) - chatField.getWidth();
+            if (extra > 0) x -= extra;
+            g.enableScissor(chatField.getX(), chatField.getY(),
+                chatField.getX() + chatField.getWidth(), chatField.getY() + chatField.getHeight());
+            g.drawText(textRenderer, shown, x, chatField.getY(), 0xFFFFFFFF, false);
+            g.disableScissor();
         }
         // 建议框定位基于 chatField.getScreenX()（屏幕坐标），与 input 同坐标空间渲染
         g.enableScissor(panelX, 0, panelX + panelW, height);
@@ -2171,14 +2184,16 @@ public class ChatBubbleScreen extends ChatScreen {
             }
             java.util.List<ChatItemCards.Card> previewCards = ChatItemCards.find(parsed.textWithoutImages());
             if (previewCards.isEmpty() && cardUrl == null && msg.isOwn() && msg.replyContent() == null
-                    && com.niuqu.chatbubble.ui.ChatEmojiPanel.soloScale(
-                        ChatItemCards.without(parsed.textWithoutImages()), textRenderer.fontHeight) == 0f
                     && NameplateBubbleScreen.hasSelectedSkin()) {
-                List<OrderedText> frameLines = wrapContent(parsed.textWithoutImages(), Math.max(16, bubbleMaxW - 24));
-                NameplateBubbleSkin frameSkin = NameplateBubbleScreen.selectedSkin(frameLines.size());
+                Text frameText = ChatItemCards.without(parsed.textWithoutImages());
+                List<OrderedText> frameLines = wrapContent(frameText, Math.max(16, bubbleMaxW - 24));
+                int frameLinesN = Math.max(1, frameLines.size());
+                NameplateBubbleSkin frameSkin = NameplateBubbleScreen.selectedSkin(frameLinesN);
+                float fit = frameSkin == null ? 1f : com.niuqu.chatbubble.ui.ChatEmojiPanel.frameScale(
+                    frameText, textRenderer.fontHeight, frameSkin.height(), frameLinesN);
                 int textW = 0;
                 for (var line : frameLines) textW = Math.max(textW, textRenderer.getWidth(line));
-                Text frame = frameSkin == null ? null : frameSkin.frame(textW);
+                Text frame = frameSkin == null ? null : frameSkin.frame(Math.max(1, (int) (textW * fit)));
                 if (frame != null && textRenderer.getWidth(frame) <= bubbleMaxW) {
                     h = NAME_H + frameSkin.height();
                     msgHeightCache.put(msg, h);
@@ -2314,8 +2329,8 @@ public class ChatBubbleScreen extends ChatScreen {
         // characters per line (bubble-less emote/image paths above keep the unscaled lines).
         java.util.List<ChatItemCards.Card> itemCards = ChatItemCards.find(parsed.textWithoutImages());
         Text visible = ChatItemCards.without(parsed.textWithoutImages());
-        float craft = com.niuqu.chatbubble.ui.ChatEmojiPanel.soloScale(visible, textRenderer.fontHeight);
-        boolean skinEligible = craft == 0f && itemCards.isEmpty() && cardUrl == null && own && msg.replyContent() == null && NameplateBubbleScreen.hasSelectedSkin();
+        boolean skinEligible = itemCards.isEmpty() && cardUrl == null && own && msg.replyContent() == null && NameplateBubbleScreen.hasSelectedSkin();
+        float craft = skinEligible ? 0f : com.niuqu.chatbubble.ui.ChatEmojiPanel.soloScale(visible, textRenderer.fontHeight);
         float s = craft > 0f ? craft : (skinEligible ? 1f : Appearance.bubbleScale(textRenderer.fontHeight));
         int wrapW = craft > 0f ? Math.max(16, (int) (bubbleMaxW / craft))
             : skinEligible ? Math.max(16, bubbleMaxW - 24)
@@ -2323,8 +2338,10 @@ public class ChatBubbleScreen extends ChatScreen {
         lines = visible.getString().isBlank() && !itemCards.isEmpty() ? List.of() : wrapContent(visible, wrapW);
         int textW = 0;
         for (var line : lines) textW = Math.max(textW, textRenderer.getWidth(line));
-        NameplateBubbleSkin frameSkin = skinEligible ? NameplateBubbleScreen.selectedSkin(lines.size()) : null;
-        Text frame = frameSkin == null ? null : frameSkin.frame(textW);
+        NameplateBubbleSkin frameSkin = skinEligible ? NameplateBubbleScreen.selectedSkin(Math.max(1, lines.size())) : null;
+        float frameFit = frameSkin == null ? 1f : com.niuqu.chatbubble.ui.ChatEmojiPanel.frameScale(
+            visible, textRenderer.fontHeight, frameSkin.height(), Math.max(1, lines.size()));
+        Text frame = frameSkin == null ? null : frameSkin.frame(Math.max(1, (int) (textW * frameFit)));
         boolean customFrame = frame != null && textRenderer.getWidth(frame) <= bubbleMaxW;
         if (skinEligible && !customFrame) {
             s = Appearance.bubbleScale(textRenderer.fontHeight);
@@ -2404,36 +2421,39 @@ public class ChatBubbleScreen extends ChatScreen {
             // (s == 1 still needs the offset, only the scale is skipped), and clickable spans
             // are recorded in origin space then transformed back to screen space so
             // hit-testing and the visual position stay in sync at every bubble size.
+            float textScale = customFrame ? frameFit : s;
+            int lineW = textRenderer.getWidth(lines.get(li));
             int textSX = customFrame
-                ? bubbleX + (bubbleW - textRenderer.getWidth(lines.get(li))) / 2
+                ? bubbleX + (bubbleW - (int) (lineW * textScale)) / 2
                 : bubbleX + (int)(BUBBLE_PAD_X * s);
             int textSY = customFrame
-                ? bubbleY + Math.max(0, (bubbleH - lines.size() * textRenderer.fontHeight) / 2) + li * textRenderer.fontHeight
+                ? bubbleY + Math.max(0, (bubbleH - (int) (lines.size() * textRenderer.fontHeight * textScale)) / 2)
+                    + (int) (li * textRenderer.fontHeight * textScale)
                 : bubbleY + (int)(BUBBLE_PAD_Y * s) + (int)(li * textRenderer.fontHeight * s);
             int beforeText = textSpans.size();
             int beforeLine = clickableSpans.size();
             g.getMatrices().push();
             g.getMatrices().translate(textSX, textSY, 0);
-            if (s != 1f) g.getMatrices().scale(s, s, 1f);
+            if (textScale != 1f) g.getMatrices().scale(textScale, textScale, 1f);
             renderLineWithClicks(g, lines.get(li), 0, 0, fgA, fbP,
-                index, li, TextSpan.KIND_CONTENT, s, bg, textSelection);
+                index, li, TextSpan.KIND_CONTENT, textScale, bg, textSelection);
             g.getMatrices().pop();
             for (int i = beforeLine; i < clickableSpans.size(); i++) {
                 ClickableSpan sp = clickableSpans.get(i);
                 clickableSpans.set(i, new ClickableSpan(
-                    textSX + (int)(sp.x * s),
-                    textSY + (int)(sp.y * s),
-                    Math.max(1, (int)(sp.w * s)),
-                    Math.max(1, (int)(sp.h * s)),
+                    textSX + (int)(sp.x * textScale),
+                    textSY + (int)(sp.y * textScale),
+                    Math.max(1, (int)(sp.w * textScale)),
+                    Math.max(1, (int)(sp.h * textScale)),
                     sp.style));
             }
             for (int i = beforeText; i < textSpans.size(); i++) {
                 TextSpan sp = textSpans.get(i);
                 textSpans.set(i, sp.withPosition(
-                    textSX + (int)(sp.x() * s),
-                    textSY + (int)(sp.y() * s),
-                    Math.max(1, (int)(sp.w() * s)),
-                    Math.max(1, (int)(sp.h() * s))));
+                    textSX + (int)(sp.x() * textScale),
+                    textSY + (int)(sp.y() * textScale),
+                    Math.max(1, (int)(sp.w() * textScale)),
+                    Math.max(1, (int)(sp.h() * textScale))));
             }
         }
 

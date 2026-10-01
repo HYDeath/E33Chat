@@ -31,11 +31,33 @@ public class ChatEmojiPanel {
 
     public static Style craftStyle(int codepoint) { return craftStyles.get(codepoint); }
 
+    public static boolean containsCraft(String text) {
+        if (text == null || text.isEmpty() || craftKeywords.isEmpty()) return false;
+        for (int i = 0; i < text.length();) {
+            int cp = text.codePointAt(i);
+            if (craftKeywords.containsKey(cp)) return true;
+            i += Character.charCount(cp);
+        }
+        return false;
+    }
+
     /** Scale for a message that is only CE glyphs. Zero keeps the normal bubble size. */
     public static float soloScale(Text text, int fontHeight) {
         if (fontHeight <= 0 || !craftOnly(text)) return 0f;
         float scale = SOLO_PX / (float) fontHeight;
         return scale > 1.05f ? scale : 0f;
+    }
+
+    /**
+     * Largest scale that still sits inside a fixed nameplate PNG.
+     * The texture cannot grow vertically; horizontal tiles already follow the text width.
+     */
+    public static float frameScale(Text text, int fontHeight, int frameHeight, int lines) {
+        if (fontHeight <= 0 || frameHeight <= 0 || lines <= 0 || !craftOnly(text)) return 1f;
+        float perLine = Math.max(fontHeight, (frameHeight - 4f) / lines);
+        float scale = perLine / fontHeight;
+        if (scale < 1.05f) return 1f;
+        return Math.min(scale, 2.4f);
     }
 
     public static String outgoing(String text) {
