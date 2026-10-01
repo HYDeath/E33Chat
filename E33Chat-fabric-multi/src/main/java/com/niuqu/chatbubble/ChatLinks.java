@@ -32,6 +32,7 @@ public final class ChatLinks {
     private static final Pattern URL = Pattern.compile("https?://[^\\s<>\\\"']+", Pattern.CASE_INSENSITIVE);
     private static final Pattern HIDDEN_LINK = Pattern.compile("\\[链接]");
     private static final Pattern BILI_VIDEO = Pattern.compile("(?i)^/video/(BV[0-9a-z]{10}|av[0-9]+)(?:/|$)");
+    private static final Pattern BILI_LIVE = Pattern.compile("^/(\\d{1,12})(?:/|$)");
     private static final Pattern META = Pattern.compile("<meta\\s+[^>]{0,2048}>", Pattern.CASE_INSENSITIVE);
     private static final Pattern ATTR = Pattern.compile("([a-zA-Z:-]+)\\s*=\\s*([\\\"'])(.*?)\\2", Pattern.CASE_INSENSITIVE);
     private static final Pattern TITLE = Pattern.compile("<title[^>]*>(.*?)</title>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
@@ -292,6 +293,8 @@ public final class ChatLinks {
     }
 
     private static Preview fetch(String url, Preview fallback) {
+        Preview live = fetchLiveCover(url, fallback);
+        if (live != null) return live;
         try {
             URI page = URI.create(previewRequestUrl(url));
             for (int redirects = 0; redirects <= 3; redirects++) {
@@ -330,13 +333,21 @@ public final class ChatLinks {
                         }
                         if (property.equalsIgnoreCase("og:title")) title = clean(content);
                         if (property.equalsIgnoreCase("author") || property.equalsIgnoreCase("og:site_name")) author = clean(content);
-                        if (property.equalsIgnoreCase("og:image")) image = content;
+                        if (image.isEmpty() && (property.equalsIgnoreCase("og:image")
+                            || property.equalsIgnoreCase("og:image:url")
+                            || property.equalsIgnoreCase("twitter:image")
+                            || property.equalsIgnoreCase("twitter:image:src"))) image = content;
                     }
                     if (title.isEmpty()) {
                         Matcher t = TITLE.matcher(html);
                         if (t.find()) title = clean(t.group(1));
                     }
                     if (image.startsWith("//")) image = "https:" + image;
+                    else if (!image.isEmpty() && !image.startsWith("http")) {
+                        try { image = page.resolve(image).toString(); }
+                        catch (IllegalArgumentException ex) { image = ""; }
+                    }
+                    image = image.replace("&amp;", "&");
                     if (!allowedImage(image, fallback.site())) image = "";
                     return new Preview(url, fallback.site(), title.isEmpty() ? fallback.title() : title,
                         author.isEmpty() ? fallback.author() : author, image);
@@ -346,6 +357,51 @@ public final class ChatLinks {
             return fallback;
         }
         return fallback;
+    }
+
+    /** Live room pages are a shell without og:image. The room API carries the cover. */
+    private static Preview fetchLiveCover(String url, Preview fallback) {
+        if (!"B站".equals(fallback.site())) return null;
+        URI uri;
+        try { uri = URI.create(normalizeWebUrl(url)); }
+        catch (IllegalArgumentException ex) { return null; }
+        String host = host(uri);
+        if (!host.startsWith("live.")) return null;
+        Matcher room = BILI_LIVE.matcher(uri.getPath() == null ? "" : uri.getPath());
+        if (!room.find()) return null;
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(
+                    "https://api.live.bilibili.com/room/v1/Room/get_info?room_id=" + room.group(1)))
+                .timeout(Duration.ofSeconds(6))
+                .header("User-Agent", "Mozilla/5.0 E33Chat-LinkPreview")
+                .header("Referer", "https://live.bilibili.com/")
+                .header("Accept", "application/json").GET().build();
+            HttpResponse<InputStream> response = HTTP.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            try (InputStream raw = response.body()) {
+                if (response.statusCode() != 200) return null;
+                JsonElement parsed = JsonParser.parseString(new String(raw.readNBytes(64 * 1024),
+                    java.nio.charset.StandardCharsets.UTF_8));
+                if (!parsed.isJsonObject()) return null;
+                JsonElement dataEl = parsed.getAsJsonObject().get("data");
+                if (dataEl == null || !dataEl.isJsonObject()) return null;
+                JsonObject data = dataEl.getAsJsonObject();
+                String title = jsonText(data, "title");
+                String image = jsonText(data, "user_cover");
+                if (image.isEmpty()) image = jsonText(data, "keyframe");
+                if (image.startsWith("//")) image = "https:" + image;
+                if (!allowedImage(image, "B站")) image = "";
+                if (image.isEmpty()) return null;
+                return new Preview(url, fallback.site(), title.isEmpty() ? fallback.title() : clean(title),
+                    "哔哩哔哩直播", image);
+            }
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private static String jsonText(JsonObject obj, String key) {
+        JsonElement value = obj.get(key);
+        return value != null && value.isJsonPrimitive() ? value.getAsString() : "";
     }
 
     private static boolean allowedImage(String url, String site) {
