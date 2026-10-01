@@ -3282,9 +3282,9 @@ public class ChatBubbleScreen extends ChatScreen {
     }
 
     private void sendMessage() {
-        String raw = com.niuqu.chatbubble.ui.ChatEmojiPanel.outgoing(chatField.getText()).trim();
-        if (raw.isEmpty()) return;
-        if (raw.contains("[[CICode,url=file://")) {
+        String field = chatField.getText();
+        if (field == null || field.trim().isEmpty()) return;
+        if (field.contains("[[CICode,url=file://")) {
             //#if MC >= 26000
             //$$ minecraft.player.sendSystemMessage(Text.translatable("e33chat.upload.disabled"));
             //#else
@@ -3292,10 +3292,49 @@ public class ChatBubbleScreen extends ChatScreen {
             //#endif
             return;
         }
-        sendMessageText(raw);
+        String trimmed = field.trim();
+        int budget = packetBudget(trimmed);
+        if (budget < 1) {
+            chatTooLong();
+            return;
+        }
+        java.util.List<String> parts = com.niuqu.chatbubble.ui.ChatEmojiPanel.pack(trimmed, budget);
+        for (int i = 0; i < parts.size(); i++) {
+            if (parts.get(i).length() > budget) {
+                chatTooLong();
+                return;
+            }
+            sendMessageText(parts.get(i), i == parts.size() - 1);
+        }
     }
 
-    private void sendMessageText(String text) {
+    /** Room left for the message body after /msg or group-command prefixes. */
+    private int packetBudget(String trimmed) {
+        if (trimmed.startsWith("/")) return com.niuqu.chatbubble.ui.ChatEmojiPanel.CHAT_PACKET_LIMIT;
+        int overhead = 0;
+        if (whisperPartner != null)
+            overhead = ("/msg " + whisperPartner + " ").length();
+        else if (com.niuqu.chatbubble.chat.GroupChannelState.supported()) {
+            String tab = com.niuqu.chatbubble.chat.GroupChannelState.active();
+            if (tab != null
+                    && !com.niuqu.chatbubble.chat.GroupChannelState.TAB_SYSTEM.equals(tab)
+                    && !com.niuqu.chatbubble.chat.GroupChannelState.TAB_ALL.equals(tab)
+                    && !com.niuqu.chatbubble.chat.GroupChannelState.TAB_WORLD.equals(tab))
+                overhead = ("/e33chat group msg " + tab + " ").length();
+        }
+        return com.niuqu.chatbubble.ui.ChatEmojiPanel.CHAT_PACKET_LIMIT - overhead;
+    }
+
+    private void chatTooLong() {
+        Text notice = Text.literal("表情展开后超过聊天长度，没有发出去");
+        //#if MC >= 26000
+        //$$ minecraft.player.sendSystemMessage(notice);
+        //#else
+        client.player.sendMessage(notice, false);
+        //#endif
+    }
+
+    private void sendMessageText(String text, boolean closeWhenDone) {
         String raw = text;
         var cfg = ChatBubbleClientSetup.config();
         // Send the text UNCHANGED (raw '&', never '§'): vanilla servers reject '§' in
@@ -3361,6 +3400,10 @@ public class ChatBubbleScreen extends ChatScreen {
             replyTargetIndex = -1;
         }
 
+        if (text.length() > com.niuqu.chatbubble.ui.ChatEmojiPanel.CHAT_PACKET_LIMIT) {
+            chatTooLong();
+            return;
+        }
         ChatLinks.rememberOutgoing(text);
         if (text.startsWith("/"))
             // yarn: sendChatCommand is the full signed path (vanilla ChatScreen
@@ -3414,7 +3457,7 @@ public class ChatBubbleScreen extends ChatScreen {
         scrollToBottom = true;
         // Optional vanilla-style behaviour: close the chat screen right after the
         // message goes out (off by default — this screen supports multi-send).
-        if (cfg != null && cfg.closeChatOnSend()) onClose();
+        if (closeWhenDone && cfg != null && cfg.closeChatOnSend()) onClose();
     }
 
 

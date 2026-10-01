@@ -3313,14 +3313,14 @@ public class ChatBubbleScreen extends ChatScreen {
     }
 
     private void sendMessage() {
-        String raw = ChatEmojiPanel.outgoing(chatField.getText()).trim();
-        if (raw.isEmpty()) return;
-        if (raw.contains("[[CICode,url=file://")) {
+        String field = chatField.getText();
+        if (field == null || field.trim().isEmpty()) return;
+        if (field.contains("[[CICode,url=file://")) {
             // A local file:// CICode (chatimage's drag/paste handler inserts
             // these) is a local-only broken link. Kick off our own upload and
             // block the send until it replaces the link.
             if (!uploading) {
-                String localPath = extractLocalPath(raw);
+                String localPath = extractLocalPath(field);
                 if (localPath != null) upload(new java.io.File(localPath));
             }
             //#if MC >= 26000
@@ -3328,9 +3328,37 @@ public class ChatBubbleScreen extends ChatScreen {
             //#else
             client.player.sendMessage(Text.translatable("e33chat.upload.wait"), false);
             //#endif
-            ChatMessageStore.debugLog("[e33chat] upload block | uploading=" + uploading + " | raw=" + raw);
+            ChatMessageStore.debugLog("[e33chat] upload block | uploading=" + uploading + " | raw=" + field);
             return;
         }
+        String trimmed = field.trim();
+        int budget = ChatEmojiPanel.CHAT_PACKET_LIMIT;
+        if (whisperPartner != null && !trimmed.startsWith("/"))
+            budget -= ("/msg " + whisperPartner + " ").length();
+        if (budget < 1) {
+            chatTooLong();
+            return;
+        }
+        java.util.List<String> parts = ChatEmojiPanel.pack(trimmed, budget);
+        for (int i = 0; i < parts.size(); i++) {
+            if (parts.get(i).length() > budget) {
+                chatTooLong();
+                return;
+            }
+            sendOutgoing(parts.get(i), i == parts.size() - 1);
+        }
+    }
+
+    private void chatTooLong() {
+        //#if MC >= 26000
+        //$$ minecraft.player.sendSystemMessage(Text.literal("表情展开后超过聊天长度，没有发出去"));
+        //#else
+        client.player.sendMessage(Text.literal("表情展开后超过聊天长度，没有发出去"), false);
+        //#endif
+    }
+
+    private void sendOutgoing(String raw, boolean closeWhenDone) {
+        if (raw == null || raw.isEmpty()) return;
         var cfg = ChatBubbleClientSetup.config();
         // Send the text UNCHANGED (raw '&', never '§'): vanilla servers reject '§' in
         // player chat and kick, so converting client-side is a dead end. Server color
@@ -3379,6 +3407,10 @@ public class ChatBubbleScreen extends ChatScreen {
             ClientPlayNetworking.send(new QuoteSyncPayload("", "", displayText));
         //#endif
 
+        if (text.length() > ChatEmojiPanel.CHAT_PACKET_LIMIT) {
+            chatTooLong();
+            return;
+        }
         if (localBubble) ChatLinks.rememberOutgoing(displayText);
         GuiCompat.sendChat(client.player.networkHandler, text);
         client.inGameHud.getChatHud().addToMessageHistory(text);
@@ -3424,7 +3456,7 @@ public class ChatBubbleScreen extends ChatScreen {
         chatField.setText("");
         savedInput = "";
         scrollToBottom = true;
-        if (cfg != null && cfg.closeChatOnSend()) onClose();
+        if (closeWhenDone && cfg != null && cfg.closeChatOnSend()) onClose();
     }
 
 

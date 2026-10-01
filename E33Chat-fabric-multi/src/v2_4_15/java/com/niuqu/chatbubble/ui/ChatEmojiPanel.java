@@ -74,6 +74,48 @@ public class ChatEmojiPanel {
         return out.toString();
     }
 
+    /** Vanilla rejects a chat string longer than this and disconnects the client. */
+    public static final int CHAT_PACKET_LIMIT = 256;
+
+    /**
+     * Wire texts for one input line. CraftEngine shortcodes are longer than the
+     * glyph, so a row of emojis must be split on glyph boundaries or the chat
+     * packet encoder kicks the player.
+     */
+    public static java.util.List<String> pack(String text, int limit) {
+        java.util.ArrayList<String> parts = new java.util.ArrayList<>();
+        if (text == null || limit < 1) return parts;
+        String trimmed = text.trim();
+        if (trimmed.isEmpty()) return parts;
+        if (trimmed.startsWith("/")) {
+            String wire = outgoing(trimmed);
+            if (wire != null && !wire.isEmpty()) parts.add(wire);
+            return parts;
+        }
+        StringBuilder chunk = new StringBuilder();
+        int wireLength = 0;
+        for (int i = 0; i < trimmed.length();) {
+            int cp = trimmed.codePointAt(i);
+            int count = Character.charCount(cp);
+            String token = trimmed.substring(i, i + count);
+            int tokenWire = outgoing(token).length();
+            if (tokenWire > limit) {
+                i += count;
+                continue;
+            }
+            if (wireLength + tokenWire > limit && chunk.length() > 0) {
+                parts.add(outgoing(chunk.toString()));
+                chunk.setLength(0);
+                wireLength = 0;
+            }
+            chunk.append(token);
+            wireLength += tokenWire;
+            i += count;
+        }
+        if (chunk.length() > 0) parts.add(outgoing(chunk.toString()));
+        return parts;
+    }
+
     /** Shortcodes back into the single glyph the input box shows. */
     public static String glyphs(String text) {
         if (text == null || text.isEmpty() || craftSymbols.isEmpty() || text.indexOf(':') < 0) return text;

@@ -163,6 +163,8 @@ public final class GuiCompat {
 
     public static void sendChat(ClientPlayNetworkHandler handler, String text) {
         if (handler == null || text == null || text.isEmpty()) return;
+        // The encoder disconnects the client when this string exceeds 256.
+        if (text.length() > ChatEmojiPanel.CHAT_PACKET_LIMIT) return;
         //#if MC >= 11903
         if (text.startsWith("/")) handler.sendChatCommand(text.substring(1));
         else handler.sendChatMessage(text);
