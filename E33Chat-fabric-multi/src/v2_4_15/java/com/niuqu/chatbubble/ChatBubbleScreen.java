@@ -338,6 +338,9 @@ public class ChatBubbleScreen extends ChatScreen {
         addDrawableChild(groupCreateInput);
 
         setFocused(chatField);
+        // Focusing the field replays the key that opened chat as an IME preedit,
+        // so a Chinese input method shows a stray "t". Drop that composition.
+        dismissPreedit(chatField);
         // The chat field's initial text is set before setChangedListener binds,
         // so the open-time value (e.g. "/" from the chat key) never flows through
         // onInputEdited — sync it once so the IMBlocker IME state is correct.
@@ -3576,9 +3579,33 @@ public class ChatBubbleScreen extends ChatScreen {
 
     @Override
     public void removed() {
+        // The field is created with setFocusUnlocked(false), so a normal blur
+        // never runs and the IME stays armed after the screen is gone.
+        if (chatField != null) {
+            chatField.setFocusUnlocked(true);
+            chatField.setFocused(false);
+            dismissPreedit(chatField);
+        }
         if (ChatBubbleClientSetup.config().preserveInput()) savedInput = chatField.getText();
         ChatMessageStore.setScreenOpen(false);
+        // Scroll only. clearMessages(true) would wipe sent chat and leave commands.
+        //#if MC >= 26000
+        //$$ client.inGameHud.getChatHud().resetChatScroll();
+        //#else
         client.inGameHud.getChatHud().reset();
+        //#endif
+    }
+
+    private void dismissPreedit(Object widget) {
+        Object keyboard = client.keyboard;
+        if (keyboard == null || widget == null) return;
+        for (java.lang.reflect.Method method : keyboard.getClass().getMethods()) {
+            if (!"submitPreeditEvent".equals(method.getName()) || method.getParameterCount() != 2
+                || !java.lang.reflect.Modifier.isStatic(method.getModifiers())) continue;
+            try { method.invoke(null, widget, null); }
+            catch (Throwable ignored) { }
+            return;
+        }
     }
 
     public void onClose() {
