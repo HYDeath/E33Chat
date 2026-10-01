@@ -1012,6 +1012,14 @@ public class ChatBubbleConfigScreen extends Screen {
 
     // ---- input ----
 
+    private static boolean primaryClick(int button) {
+        //#if MC >= 260300
+        //$$ return button == 1;
+        //#else
+        return button == 0;
+        //#endif
+    }
+
     @Override
     public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
         return mouseClicked(event.x(), event.y(), event.button());
@@ -1039,7 +1047,7 @@ public class ChatBubbleConfigScreen extends Screen {
             else treePane.dragStart((int) mouseY, treePane.offset());
             return true;
         }
-        if (button == 0) {
+        if (primaryClick(button)) {
             int ly = START_Y - treePane.offset();
             for (int i = 0; i < cats.size(); i++) {
                 if (mouseY >= ly && mouseY < ly + CAT_ROW_H && mouseX >= CAT_X && mouseX <= CAT_X + CAT_W) {

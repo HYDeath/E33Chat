@@ -7,6 +7,7 @@ import net.minecraft.client.DeltaTracker;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
@@ -21,10 +22,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class InGameHudMixin {
 
     //#if MC >= 260200
-    //$$ @Inject(method = "extractRenderState", at = @At("HEAD"), cancellable = true)
-    //$$ private void e33chat$hideHudForTranslucentScreens(DeltaTracker tickCounter,
-    //$$         boolean first, boolean second, CallbackInfo ci) {
-    //$$     if (HudVisibility.shouldHideHud()) ci.cancel();
+    // Gui.extractRenderState also draws the open screen. Cancelling the whole
+    // method hid the settings page along with the hotbar.
+    //$$ @Redirect(method = "extractRenderState", at = @At(value = "INVOKE",
+    //$$     target = "Lnet/minecraft/client/gui/Hud;extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V"))
+    //$$ private void e33chat$skipHud(net.minecraft.client.gui.Hud hud,
+    //$$         net.minecraft.client.gui.GuiGraphicsExtractor graphics, DeltaTracker tickCounter) {
+    //$$     if (!HudVisibility.shouldHideHud()) hud.extractRenderState(graphics, tickCounter);
     //$$ }
     //#else
     @Inject(method = "extractRenderState", at = @At("HEAD"), cancellable = true)
