@@ -2491,16 +2491,17 @@ public class ChatBubbleScreen extends ChatScreen {
         if (!preview.imageUrl().isEmpty()) {
             ImageEntry entry = ImageLoader.getOrLoad(preview.imageUrl());
             if (entry != null && entry.state() == ImageEntry.State.LOADED && entry.textureId() != null) {
+                int[] region = ChatLinks.coverRegion(thumbW, thumbH, entry.width(), entry.height());
                 //#if MC >= 12106
                 g.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED, entry.textureId(), thumbX, thumbY,
-                    0.0F, 0.0F, thumbW, thumbH, entry.width(), entry.height(), entry.width(), entry.height());
+                    region[0], region[1], thumbW, thumbH, region[2], region[3], entry.width(), entry.height());
                 //#else
                 //#if MC >= 12102
                 //$$ g.drawTexture(id -> net.minecraft.client.render.RenderLayer.getGuiTextured(id), entry.textureId(), thumbX, thumbY,
-                //$$     0, 0, thumbW, thumbH, entry.width(), entry.height(), entry.width(), entry.height());
+                //$$     region[0], region[1], thumbW, thumbH, region[2], region[3], entry.width(), entry.height());
                 //#else
                 //$$ g.drawTexture(entry.textureId(), thumbX, thumbY, thumbW, thumbH,
-                //$$     0, 0, entry.width(), entry.height(), entry.width(), entry.height());
+                //$$     region[0], region[1], region[2], region[3], entry.width(), entry.height());
                 //#endif
                 //#endif
             }

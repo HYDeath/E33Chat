@@ -2547,8 +2547,9 @@ public class ChatBubbleScreen extends ChatScreen {
                 (int) (255 * alpha)));
         ImageEntry cover = preview.imageUrl().isEmpty() ? null : ImageLoader.getOrLoad(preview.imageUrl());
         if (cover != null && cover.state() == ImageEntry.State.LOADED && cover.textureId() != null) {
+            int[] region = ChatLinks.coverRegion(thumbW, thumbH, cover.width(), cover.height());
             g.drawTexture(cover.textureId(), 4, 4, thumbW, thumbH,
-                0, 0, cover.width(), cover.height(), cover.width(), cover.height());
+                region[0], region[1], region[2], region[3], cover.width(), cover.height());
         } else {
             g.drawText(textRenderer, preview.site().equals("B站") ? "▶" : "官网", 9, 23,
                 ChatBubbleTheme.alphaBlend(0xFFFFFFFF, (int) (255 * alpha)), false);

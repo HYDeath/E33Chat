@@ -324,7 +324,7 @@ public final class ChatLinks {
                         .toLowerCase(Locale.ROOT).contains("gzip") ? new GZIPInputStream(raw) : raw;
                     byte[] bytes = stream.readNBytes(256 * 1024);
                     String html = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-                    String title = "", author = "", image = "";
+                    String title = "", author = "", image = "", twitterImage = "";
                     Matcher tags = META.matcher(html);
                     while (tags.find()) {
                         String property = "", content = "";
@@ -336,10 +336,11 @@ public final class ChatLinks {
                         if (property.equalsIgnoreCase("og:title")) title = clean(content);
                         if (property.equalsIgnoreCase("author") || property.equalsIgnoreCase("og:site_name")) author = clean(content);
                         if (image.isEmpty() && (property.equalsIgnoreCase("og:image")
-                            || property.equalsIgnoreCase("og:image:url")
-                            || property.equalsIgnoreCase("twitter:image")
-                            || property.equalsIgnoreCase("twitter:image:src"))) image = content;
+                            || property.equalsIgnoreCase("og:image:url"))) image = content;
+                        if (twitterImage.isEmpty() && (property.equalsIgnoreCase("twitter:image")
+                            || property.equalsIgnoreCase("twitter:image:src"))) twitterImage = content;
                     }
+                    if (image.isEmpty()) image = twitterImage;
                     if (title.isEmpty()) {
                         Matcher t = TITLE.matcher(html);
                         if (t.find()) title = clean(t.group(1));
@@ -349,7 +350,7 @@ public final class ChatLinks {
                         try { image = page.resolve(image).toString(); }
                         catch (IllegalArgumentException ex) { image = ""; }
                     }
-                    image = image.replace("&amp;", "&");
+                    image = coverUrl(image);
                     if (!allowedImage(image, fallback.site())) image = "";
                     return new Preview(url, fallback.site(), title.isEmpty() ? fallback.title() : title,
                         author.isEmpty() ? fallback.author() : author, image);
@@ -390,7 +391,7 @@ public final class ChatLinks {
                 String title = jsonText(data, "title");
                 String image = jsonText(data, "user_cover");
                 if (image.isEmpty()) image = jsonText(data, "keyframe");
-                if (image.startsWith("//")) image = "https:" + image;
+                image = coverUrl(image);
                 if (!allowedImage(image, "B站")) image = "";
                 if (image.isEmpty()) return null;
                 return new Preview(url, fallback.site(), title.isEmpty() ? fallback.title() : clean(title),
@@ -404,6 +405,51 @@ public final class ChatLinks {
     private static String jsonText(JsonObject obj, String key) {
         JsonElement value = obj.get(key);
         return value != null && value.isJsonPrimitive() ? value.getAsString() : "";
+    }
+
+    /**
+     * Bilibili puts a style suffix on og:image ({@code @1200w_630h}). That file is a
+     * heavily compressed social crop, which looks blocky once it is drawn into the card.
+     * The path before {@code @} is the original cover.
+     */
+    private static String coverUrl(String image) {
+        if (image == null || image.isEmpty()) return "";
+        image = image.trim().replace("&amp;", "&");
+        if (image.startsWith("//")) image = "https:" + image;
+        try {
+            URI uri = URI.create(image);
+            String imageHost = host(uri);
+            if (!domain(imageHost, "hdslb.com") && !domain(imageHost, "bilibili.com")) return image;
+            if ("http".equalsIgnoreCase(uri.getScheme())) image = "https" + image.substring("http".length());
+            int cut = image.indexOf('@');
+            if (cut > "https://".length()) image = image.substring(0, cut);
+            cut = image.indexOf('!');
+            if (cut > "https://".length()) image = image.substring(0, cut);
+            return image;
+        } catch (IllegalArgumentException ex) {
+            return "";
+        }
+    }
+
+    /** Source pixels that fill {@code boxW}×{@code boxH} without stretching. */
+    public static int[] coverRegion(int boxW, int boxH, int imgW, int imgH) {
+        if (imgW <= 0 || imgH <= 0) return new int[] {0, 0, 1, 1};
+        if (boxW <= 0 || boxH <= 0) return new int[] {0, 0, imgW, imgH};
+        float box = boxW / (float) boxH;
+        float img = imgW / (float) imgH;
+        int u, v, regionW, regionH;
+        if (img > box) {
+            regionH = imgH;
+            regionW = Math.max(1, Math.min(imgW, Math.round(imgH * box)));
+            u = Math.max(0, (imgW - regionW) / 2);
+            v = 0;
+        } else {
+            regionW = imgW;
+            regionH = Math.max(1, Math.min(imgH, Math.round(imgW / box)));
+            u = 0;
+            v = Math.max(0, (imgH - regionH) / 2);
+        }
+        return new int[] {u, v, regionW, regionH};
     }
 
     private static boolean allowedImage(String url, String site) {
