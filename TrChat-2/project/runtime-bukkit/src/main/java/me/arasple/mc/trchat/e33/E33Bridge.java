@@ -6,10 +6,13 @@ import me.arasple.mc.trchat.module.display.channel.PrivateChannel;
 import me.arasple.mc.trchat.module.internal.command.main.CommandReply;
 import me.arasple.mc.trchat.module.internal.proxy.redis.RedisManager;
 import me.arasple.mc.trchat.module.internal.proxy.redis.TrRedisMessage;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.TextReplacementConfig;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.Style;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
@@ -569,9 +572,25 @@ public final class E33Bridge implements Listener, PluginMessageListener {
         }
     }
 
-    /** Expands CraftEngine chat shortcodes with its own permission and font rules. */
+    private static volatile Map<Integer, Component> craftGlyphs = Map.of();
+    private static volatile long craftGlyphsAt;
+
+    /**
+     * CraftEngine glyphs live in a resource-pack font, not the default font.
+     * A bare private-use character (what remains after a proxy flattens the
+     * component, or what a client sends directly) draws as an empty box unless
+     * the font style travels with it. Shortcodes are expanded first; known
+     * glyph characters are then wrapped in that font so players without E33
+     * still render the pack.
+     */
     public static Component expandCraftEmoji(Player sender, Component body) {
-        if (body == null || body.toString().indexOf(':') < 0) return body;
+        if (body == null) return null;
+        Component replaced = replaceCraftShortcodes(sender, body);
+        return paintCraftGlyphs(sender, replaced == null ? body : replaced);
+    }
+
+    private static Component replaceCraftShortcodes(Player sender, Component body) {
+        if (!containsColon(body)) return body;
         Plugin craftEngine = Bukkit.getPluginManager().getPlugin("CraftEngine");
         if (craftEngine == null || !craftEngine.isEnabled()) return body;
         try {
@@ -594,6 +613,104 @@ public final class E33Bridge implements Listener, PluginMessageListener {
                     (String) result.getClass().getMethod("text").invoke(result));
         } catch (ReflectiveOperationException | LinkageError | RuntimeException ignored) { }
         return body;
+    }
+
+    private static Component paintCraftGlyphs(Player sender, Component body) {
+        Map<Integer, Component> glyphs = craftGlyphs(sender);
+        if (glyphs.isEmpty() || !containsCraftGlyph(body, glyphs)) return body;
+        return paintCraftGlyphs(body, glyphs);
+    }
+
+    private static Map<Integer, Component> craftGlyphs(Player sender) {
+        long now = System.currentTimeMillis();
+        Map<Integer, Component> cached = craftGlyphs;
+        if (!cached.isEmpty() && now - craftGlyphsAt < 60_000L) return cached;
+        Plugin craftEngine = Bukkit.getPluginManager().getPlugin("CraftEngine");
+        if (craftEngine == null || !craftEngine.isEnabled()) return cached;
+        Map<Integer, Component> found = new HashMap<>();
+        try {
+            ClassLoader loader = craftEngine.getClass().getClassLoader();
+            Class<?> api = Class.forName("net.momirealms.craftengine.core.plugin.CraftEngine", true, loader);
+            Object fonts = api.getMethod("fontManager").invoke(api.getMethod("instance").invoke(null));
+            Object emojis = fonts.getClass().getMethod("emojis").invoke(fonts);
+            if (emojis instanceof Map<?, ?> map) for (Object emoji : map.values()) {
+                Object aliases = emoji.getClass().getMethod("keywords").invoke(emoji);
+                if (!(aliases instanceof List<?> list)) continue;
+                for (Object alias : list) {
+                    if (!(alias instanceof String name) || !name.matches(":\\S[^:\\s]{0,63}:")) continue;
+                    rememberCraftGlyph(replaceCraftShortcodes(sender, Component.text(name)), Style.empty(), found);
+                }
+            }
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException ignored) { }
+        craftGlyphsAt = now;
+        if (!found.isEmpty()) craftGlyphs = Map.copyOf(found);
+        return craftGlyphs;
+    }
+
+    private static void rememberCraftGlyph(Component expanded, Style inherited, Map<Integer, Component> out) {
+        Style effective = inherited.merge(expanded.style());
+        if (expanded instanceof TextComponent text && customFont(effective.font())) {
+            String content = text.content();
+            if (content != null && content.codePointCount(0, content.length()) == 1)
+                out.putIfAbsent(content.codePointAt(0), Component.text(content).style(effective));
+        }
+        for (Component child : expanded.children()) rememberCraftGlyph(child, effective, out);
+    }
+
+    private static boolean containsColon(Component component) {
+        if (component instanceof TextComponent text && text.content() != null && text.content().indexOf(':') >= 0)
+            return true;
+        for (Component child : component.children()) if (containsColon(child)) return true;
+        return false;
+    }
+
+    private static boolean customFont(Key font) {
+        if (font == null) return false;
+        String id = font.asString();
+        return !"minecraft:default".equals(id) && !"minecraft:uniform".equals(id);
+    }
+
+    private static boolean containsCraftGlyph(Component component, Map<Integer, Component> glyphs) {
+        if (component instanceof TextComponent text && !customFont(text.style().font())) {
+            String content = text.content();
+            if (content != null) for (int i = 0; i < content.length();) {
+                int cp = content.codePointAt(i);
+                if (glyphs.containsKey(cp)) return true;
+                i += Character.charCount(cp);
+            }
+        }
+        for (Component child : component.children()) if (containsCraftGlyph(child, glyphs)) return true;
+        return false;
+    }
+
+    private static Component paintCraftGlyphs(Component component, Map<Integer, Component> glyphs) {
+        List<Component> children = new ArrayList<>();
+        for (Component child : component.children()) children.add(paintCraftGlyphs(child, glyphs));
+        if (!(component instanceof TextComponent text) || customFont(text.style().font()))
+            return component.children(children);
+        String content = text.content() == null ? "" : text.content();
+        TextComponent.Builder builder = Component.text().style(text.style());
+        StringBuilder run = new StringBuilder();
+        boolean changed = false;
+        for (int i = 0; i < content.length();) {
+            int cp = content.codePointAt(i);
+            int count = Character.charCount(cp);
+            Component glyph = glyphs.get(cp);
+            if (glyph == null) run.appendCodePoint(cp);
+            else {
+                changed = true;
+                if (run.length() > 0) {
+                    builder.append(Component.text(run.toString()).style(text.style()));
+                    run.setLength(0);
+                }
+                builder.append(glyph);
+            }
+            i += count;
+        }
+        if (!changed) return component.children(children);
+        if (run.length() > 0) builder.append(Component.text(run.toString()).style(text.style()));
+        for (Component child : children) builder.append(child);
+        return builder.build();
     }
 
     public static void headBubble(Player player, String filteredContent) {

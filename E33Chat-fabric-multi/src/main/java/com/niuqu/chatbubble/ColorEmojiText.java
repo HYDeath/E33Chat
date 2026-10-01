@@ -20,6 +20,7 @@ final class ColorEmojiText {
     static Text decorate(Text input) {
         MutableText result = Text.empty();
         input.visit((style, text) -> {
+            text = ChatEmojiPanel.glyphs(text);
             int run = 0;
             for (int i = 0; i < text.length();) {
                 int cp = text.codePointAt(i);
