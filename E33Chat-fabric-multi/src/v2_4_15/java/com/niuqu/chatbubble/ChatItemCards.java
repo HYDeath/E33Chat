@@ -406,13 +406,19 @@ public final class ChatItemCards {
     }
 
     private static String itemId(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return "minecraft:air";
         try {
+            Object item = stack.getItem();
             Object registry = registryItem();
+            // getId(T) is the numeric id. A different getId overload throws and used to
+            // abort the lookup, so every item was reported as minecraft:air.
             for (Method method : registry.getClass().getMethods()) {
-                if ("getId".equals(method.getName()) && method.getParameterCount() == 1) {
-                    Object key = method.invoke(registry, stack.getItem());
-                    if (key != null) return key.toString();
-                }
+                if (!"getKey".equals(method.getName()) || method.getParameterCount() != 1) continue;
+                if (!method.getParameterTypes()[0].isInstance(item)) continue;
+                try {
+                    Object key = method.invoke(registry, item);
+                    if (key != null && key.toString().indexOf(':') >= 0) return key.toString();
+                } catch (Throwable ignored) { }
             }
         } catch (Throwable ignored) { }
         return "minecraft:air";
@@ -421,10 +427,11 @@ public final class ChatItemCards {
     //#if MC >= 12000
     private static void drawStack(DrawContext g, ItemStack stack, int x, int y) {
         if (stack == null || stack.isEmpty()) return;
-        try { g.getClass().getMethod("drawItem", ItemStack.class, int.class, int.class).invoke(g, stack, x, y); }
-        catch (ReflectiveOperationException ex) {
-            try { g.getClass().getMethod("renderItem", ItemStack.class, int.class, int.class).invoke(g, stack, x, y); }
-            catch (ReflectiveOperationException ignored) { }
+        for (String name : new String[] {"item", "drawItem", "renderItem"}) {
+            try {
+                g.getClass().getMethod(name, ItemStack.class, int.class, int.class).invoke(g, stack, x, y);
+                return;
+            } catch (ReflectiveOperationException ignored) { }
         }
     }
     //#endif
