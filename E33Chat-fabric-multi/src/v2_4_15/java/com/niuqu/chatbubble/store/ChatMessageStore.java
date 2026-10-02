@@ -148,6 +148,37 @@ public class ChatMessageStore {
         seenPlayers.put(uuid, new SeenPlayer(uuid, profileName, newDisplay));
     }
 
+    /** Name inserted after @. Server tags and titles stay on the name line. */
+    public static String mentionTarget(ChatMessage msg) {
+        if (msg == null) return "";
+        String raw = msg.rawPlayerName();
+        if (isBareMention(raw)) return raw;
+        String fromSender = nameAfterTitles(msg.senderName() == null ? "" : msg.senderName().getString());
+        if (!fromSender.isEmpty()) return fromSender;
+        String fromRaw = nameAfterTitles(raw);
+        return fromRaw.isEmpty() ? (raw == null ? "" : raw) : fromRaw;
+    }
+
+    private static boolean isBareMention(String name) {
+        if (name == null || name.isEmpty()) return false;
+        return name.indexOf('[') < 0 && name.indexOf(']') < 0
+            && name.indexOf('『') < 0 && name.indexOf('』') < 0
+            && name.indexOf(' ') < 0;
+    }
+
+    private static String nameAfterTitles(String shown) {
+        if (shown == null || shown.isEmpty()) return "";
+        int cut = -1;
+        for (int i = 0; i < shown.length(); i++) {
+            char c = shown.charAt(i);
+            if (c == ']' || c == '』' || c == '」' || c == '〉' || c == '>') cut = i;
+        }
+        if (cut < 0 || cut + 1 >= shown.length()) return "";
+        String tail = shown.substring(cut + 1).trim();
+        while (tail.startsWith("_")) tail = tail.substring(1).trim();
+        return tail;
+    }
+
     public static List<String> knownNameVariants() {
         Set<String> out = new LinkedHashSet<>();
         for (SeenPlayer sp : seenPlayers.values()) {

@@ -1248,8 +1248,8 @@ public class ChatBubbleScreen extends ChatScreen {
                 int avatarY = msg.replyContent() != null ? r[1] - textRenderer.fontHeight - 2 : r[1] - NAME_H;
                 if (mouseX >= avatarX && mouseX <= avatarX + Appearance.avatarSize()
                     && mouseY >= avatarY && mouseY <= avatarY + Appearance.avatarSize()) {
-                    String mentionName = (msg.rawPlayerName() != null && !msg.rawPlayerName().isEmpty())
-                        ? msg.rawPlayerName() : msg.senderName().getString();
+                    String mentionName = ChatMessageStore.mentionTarget(msg);
+                    if (mentionName.isEmpty()) return true;
                     chatField.setText(chatField.getText() + "@" + mentionName + " ");
                     chatField.setCursorToEnd(false);
                     return true;
@@ -1449,9 +1449,10 @@ public class ChatBubbleScreen extends ChatScreen {
         if (mx >= menuX && mx <= menuX + CTX_W) {
             ChatMessageStore.ChatMessage msg = ChatMessageStore.getMessageAt(contextAvatarIndex);
             String name = msg != null ? msg.rawPlayerName() : null;
-            if (name == null || name.isEmpty()) { contextAvatarIndex = -1; return; }
+            String mention = ChatMessageStore.mentionTarget(msg);
+            if ((name == null || name.isEmpty()) && mention.isEmpty()) { contextAvatarIndex = -1; return; }
             if (my >= menuY && my <= menuY + CTX_ITEM_H) {
-                insertAvatarMention(name);
+                if (!mention.isEmpty()) insertAvatarMention(mention);
             } else if (my >= menuY + CTX_ITEM_H + 2 && my <= menuY + CTX_ITEM_H * 2 + 2) {
                 client.player.networkHandler.sendChatCommand((ChatMessageStore.useTpa() ? "tpa " : "tp ") + name);
             } else if (my >= menuY + CTX_ITEM_H * 2 + 4 && my <= menuY + CTX_ITEM_H * 3 + 4) {

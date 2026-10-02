@@ -106,6 +106,37 @@ public class ChatMessageStore {
         seenPlayers.put(uuid, new SeenPlayer(uuid, profileName, newDisplay));
     }
 
+    /** Name inserted after @. Server tags and titles stay on the name line. */
+    public static String mentionTarget(ChatMessage msg) {
+        if (msg == null) return "";
+        String raw = msg.rawPlayerName();
+        if (isBareMention(raw)) return raw;
+        String fromSender = nameAfterTitles(msg.senderName() == null ? "" : msg.senderName().getString());
+        if (!fromSender.isEmpty()) return fromSender;
+        String fromRaw = nameAfterTitles(raw);
+        return fromRaw.isEmpty() ? (raw == null ? "" : raw) : fromRaw;
+    }
+
+    private static boolean isBareMention(String name) {
+        if (name == null || name.isEmpty()) return false;
+        return name.indexOf('[') < 0 && name.indexOf(']') < 0
+            && name.indexOf('『') < 0 && name.indexOf('』') < 0
+            && name.indexOf(' ') < 0;
+    }
+
+    private static String nameAfterTitles(String shown) {
+        if (shown == null || shown.isEmpty()) return "";
+        int cut = -1;
+        for (int i = 0; i < shown.length(); i++) {
+            char c = shown.charAt(i);
+            if (c == ']' || c == '』' || c == '」' || c == '〉' || c == '>') cut = i;
+        }
+        if (cut < 0 || cut + 1 >= shown.length()) return "";
+        String tail = shown.substring(cut + 1).trim();
+        while (tail.startsWith("_")) tail = tail.substring(1).trim();
+        return tail;
+    }
+
     public static List<String> knownNameVariants() {
         Set<String> out = new LinkedHashSet<>();
         for (SeenPlayer sp : seenPlayers.values()) {
@@ -1261,6 +1292,10 @@ public class ChatMessageStore {
         else obj.put("sender", msg.senderName().getString());
         if (contentJson != null) obj.put("contentJson", contentJson);
         else obj.put("content", msg.content().getString());
+        java.util.List<java.util.Map<String, Object>> senderRuns = styleRuns(msg.senderName());
+        if (senderRuns != null) obj.put("senderRuns", senderRuns);
+        java.util.List<java.util.Map<String, Object>> contentRuns = styleRuns(msg.content());
+        if (contentRuns != null) obj.put("contentRuns", contentRuns);
         obj.put("own", msg.isOwn());
         obj.put("system", msg.isSystem());
         if (msg.replyContent() != null) obj.put("replyContent", msg.replyContent());
@@ -1317,8 +1352,10 @@ public class ChatMessageStore {
         if (!(timeObj instanceof Number)) return null;
         UUID uuid = null;
         try { uuid = UUID.fromString(String.valueOf(obj.get("uuid"))); } catch (Exception ignored) {}
-        Text senderName = componentFrom(obj, "senderJson", "sender");
-        Text content = componentFrom(obj, "contentJson", "content");
+        Text senderName = textFromRuns(obj.get("senderRuns"));
+        if (senderName == null) senderName = componentFrom(obj, "senderJson", "sender");
+        Text content = textFromRuns(obj.get("contentRuns"));
+        if (content == null) content = componentFrom(obj, "contentJson", "content");
         if (content == null || content.getString().isBlank()) return null;
         return new ChatMessage(
             uuid != null ? uuid : new UUID(0, 0),
@@ -1335,6 +1372,50 @@ public class ChatMessageStore {
             Boolean.TRUE.equals(obj.get("whisper")),
             (String) obj.get("whisperPartner")
         );
+    }
+
+    private static java.util.List<java.util.Map<String, Object>> styleRuns(Text text) {
+        if (text == null) return null;
+        java.util.List<java.util.Map<String, Object>> runs = new ArrayList<>();
+        boolean[] styled = {false};
+        text.visit((style, value) -> {
+            java.util.Map<String, Object> run = new java.util.LinkedHashMap<>();
+            run.put("t", value);
+            if (style.getColor() != null) {
+                run.put("c", style.getColor().getRgb() & 0xFFFFFF);
+                styled[0] = true;
+            }
+            if (Boolean.TRUE.equals(style.isBold())) { run.put("b", true); styled[0] = true; }
+            if (Boolean.TRUE.equals(style.isItalic())) { run.put("i", true); styled[0] = true; }
+            if (Boolean.TRUE.equals(style.isUnderlined())) { run.put("u", true); styled[0] = true; }
+            if (Boolean.TRUE.equals(style.isStrikethrough())) { run.put("st", true); styled[0] = true; }
+            if (Boolean.TRUE.equals(style.isObfuscated())) { run.put("o", true); styled[0] = true; }
+            runs.add(run);
+            return java.util.Optional.empty();
+        }, Style.EMPTY);
+        return styled[0] ? runs : null;
+    }
+
+    private static Text textFromRuns(Object raw) {
+        if (!(raw instanceof List<?> list) || list.isEmpty()) return null;
+        MutableText out = Text.empty();
+        boolean any = false;
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> map)) continue;
+            Object text = map.get("t");
+            if (!(text instanceof String value)) continue;
+            any = true;
+            Style style = Style.EMPTY;
+            Object color = map.get("c");
+            if (color instanceof Number number) style = style.withColor(number.intValue() & 0xFFFFFF);
+            if (Boolean.TRUE.equals(map.get("b"))) style = style.withBold(true);
+            if (Boolean.TRUE.equals(map.get("i"))) style = style.withItalic(true);
+            if (Boolean.TRUE.equals(map.get("u"))) style = style.withUnderline(true);
+            if (Boolean.TRUE.equals(map.get("st"))) style = style.withStrikethrough(true);
+            if (Boolean.TRUE.equals(map.get("o"))) style = style.withObfuscated(true);
+            out.append(Text.literal(value).fillStyle(style));
+        }
+        return any ? out : null;
     }
 
     private static Text componentFrom(Map<String, Object> obj, String jsonKey, String textKey) {
