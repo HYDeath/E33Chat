@@ -1481,8 +1481,18 @@ public class ChatBubbleScreen extends ChatScreen {
         contextMsgIndex = -1;
     }
 
+    private void insertAvatarMention(String name) {
+        chatField.setText(chatField.getText() + "@" + name + " ");
+        //#if MC >= 12004
+        chatField.setCursorToEnd(false);
+        //#else
+        //$$ chatField.setCursorToEnd();
+        //#endif
+        setFocused(chatField);
+    }
+
     private void handleAvatarContextClick(int mx, int my) {
-        int menuH = CTX_ITEM_H * 3 + 4;
+        int menuH = CTX_ITEM_H * 4 + 6;
         int menuX = Math.min(contextAvatarX, panelX + panelW - CTX_W - 2);
         int menuY = contextAvatarY - menuH;
         if (menuY < msgTop) menuY = contextAvatarY + 4;
@@ -1491,13 +1501,15 @@ public class ChatBubbleScreen extends ChatScreen {
             String name = msg != null ? msg.rawPlayerName() : null;
             if (name == null || name.isEmpty()) { contextAvatarIndex = -1; return; }
             if (my >= menuY && my <= menuY + CTX_ITEM_H) {
-                GuiCompat.sendChat(client.player.networkHandler, "/" + (ChatMessageStore.useTpa() ? "tpa " : "tp ") + name);
+                insertAvatarMention(name);
             } else if (my >= menuY + CTX_ITEM_H + 2 && my <= menuY + CTX_ITEM_H * 2 + 2) {
+                GuiCompat.sendChat(client.player.networkHandler, "/" + (ChatMessageStore.useTpa() ? "tpa " : "tp ") + name);
+            } else if (my >= menuY + CTX_ITEM_H * 2 + 4 && my <= menuY + CTX_ITEM_H * 3 + 4) {
                 whisperPartner = name;
                 ChatMessageStore.clearUnreadWhisper(name);
                 if (sidebarSearchBox != null) sidebarSearchBox.setText("");
                 setFocused(chatField); scrollToBottom = true;
-            } else if (my >= menuY + CTX_ITEM_H * 2 + 4 && my <= menuY + menuH) {
+            } else if (my >= menuY + CTX_ITEM_H * 3 + 6 && my <= menuY + menuH) {
                 toggleBlockedPlayer();
             }
         }
@@ -2735,7 +2747,7 @@ public class ChatBubbleScreen extends ChatScreen {
 
     private void renderAvatarContextMenu(DrawContext g, int mouseX, int mouseY) {
         if (contextAvatarIndex < 0) return;
-        int menuH = CTX_ITEM_H * 3 + 4;
+        int menuH = CTX_ITEM_H * 4 + 6;
         int menuX = Math.min(contextAvatarX, panelX + panelW - CTX_W - 2);
         int menuY = contextAvatarY - menuH;
         if (menuY < msgTop) menuY = contextAvatarY + 4;
@@ -2747,35 +2759,44 @@ public class ChatBubbleScreen extends ChatScreen {
         ColoredTextureRenderer.drawWithAlpha(g, UiTextureManager.rl(UiElement.DIVIDER), menuX, menuY, 1, menuH, alpha);
         ColoredTextureRenderer.drawWithAlpha(g, UiTextureManager.rl(UiElement.DIVIDER), menuX + CTX_W - 1, menuY, 1, menuH, alpha);
 
-        boolean hoverTp = mouseX >= menuX && mouseX <= menuX + CTX_W
+        boolean hoverMention = mouseX >= menuX && mouseX <= menuX + CTX_W
             && mouseY >= menuY && mouseY <= menuY + CTX_ITEM_H;
-        ColoredTextureRenderer.drawWithAlpha(g, UiTextureManager.rl(hoverTp ? UiElement.CONTEXT_HOVER : UiElement.SIDEBAR_SELECTED),
+        ColoredTextureRenderer.drawWithAlpha(g, UiTextureManager.rl(hoverMention ? UiElement.CONTEXT_HOVER : UiElement.SIDEBAR_SELECTED),
             menuX + 1, menuY + 1, CTX_W - 2, CTX_ITEM_H - 1, alpha);
-        drawTextureIconAlpha(g, iconTex("tp"), menuX + 5, menuY + 3, 12, alpha);
-        g.drawText(textRenderer, Text.translatable(ChatMessageStore.useTpa() ? "e33chat.context.tpa" : "e33chat.context.tp").getString(), menuX + 22, menuY + 4, c().textPrimary(), false);
+        g.drawText(textRenderer, "@", menuX + 8, menuY + 4, c().textPrimary(), false);
+        g.drawText(textRenderer, Text.translatable("e33chat.context.mention").getString(), menuX + 22, menuY + 4, c().textPrimary(), false);
 
         g.fill(menuX + 4, menuY + CTX_ITEM_H + 1, menuX + CTX_W - 4, menuY + CTX_ITEM_H + 2, c().closeHoverBg());
 
-        boolean hoverWhisper = mouseX >= menuX && mouseX <= menuX + CTX_W
+        boolean hoverTp = mouseX >= menuX && mouseX <= menuX + CTX_W
             && mouseY >= menuY + CTX_ITEM_H + 2 && mouseY <= menuY + CTX_ITEM_H * 2 + 2;
-        ColoredTextureRenderer.drawWithAlpha(g, UiTextureManager.rl(hoverWhisper ? UiElement.CONTEXT_HOVER : UiElement.SIDEBAR_SELECTED),
+        ColoredTextureRenderer.drawWithAlpha(g, UiTextureManager.rl(hoverTp ? UiElement.CONTEXT_HOVER : UiElement.SIDEBAR_SELECTED),
             menuX + 1, menuY + CTX_ITEM_H + 2, CTX_W - 2, CTX_ITEM_H, alpha);
-        drawTextureIconAlpha(g, iconTex("whisper"), menuX + 5, menuY + CTX_ITEM_H + 4, 12, alpha);
-        g.drawText(textRenderer, Text.translatable("e33chat.context.whisper").getString(), menuX + 22, menuY + CTX_ITEM_H + 6, c().textPrimary(), false);
+        drawTextureIconAlpha(g, iconTex("tp"), menuX + 5, menuY + CTX_ITEM_H + 4, 12, alpha);
+        g.drawText(textRenderer, Text.translatable(ChatMessageStore.useTpa() ? "e33chat.context.tpa" : "e33chat.context.tp").getString(), menuX + 22, menuY + CTX_ITEM_H + 6, c().textPrimary(), false);
 
         g.fill(menuX + 4, menuY + CTX_ITEM_H * 2 + 3, menuX + CTX_W - 4, menuY + CTX_ITEM_H * 2 + 4, c().closeHoverBg());
 
-        boolean hoverBlock = mouseX >= menuX && mouseX <= menuX + CTX_W
-            && mouseY >= menuY + CTX_ITEM_H * 2 + 4 && mouseY <= menuY + menuH;
-        ColoredTextureRenderer.drawWithAlpha(g, UiTextureManager.rl(hoverBlock ? UiElement.CONTEXT_HOVER : UiElement.SIDEBAR_SELECTED),
+        boolean hoverWhisper = mouseX >= menuX && mouseX <= menuX + CTX_W
+            && mouseY >= menuY + CTX_ITEM_H * 2 + 4 && mouseY <= menuY + CTX_ITEM_H * 3 + 4;
+        ColoredTextureRenderer.drawWithAlpha(g, UiTextureManager.rl(hoverWhisper ? UiElement.CONTEXT_HOVER : UiElement.SIDEBAR_SELECTED),
             menuX + 1, menuY + CTX_ITEM_H * 2 + 4, CTX_W - 2, CTX_ITEM_H, alpha);
-        drawTextureIconAlpha(g, iconTex("block"), menuX + 5, menuY + CTX_ITEM_H * 2 + 6, 12, alpha);
+        drawTextureIconAlpha(g, iconTex("whisper"), menuX + 5, menuY + CTX_ITEM_H * 2 + 6, 12, alpha);
+        g.drawText(textRenderer, Text.translatable("e33chat.context.whisper").getString(), menuX + 22, menuY + CTX_ITEM_H * 2 + 8, c().textPrimary(), false);
+
+        g.fill(menuX + 4, menuY + CTX_ITEM_H * 3 + 5, menuX + CTX_W - 4, menuY + CTX_ITEM_H * 3 + 6, c().closeHoverBg());
+
+        boolean hoverBlock = mouseX >= menuX && mouseX <= menuX + CTX_W
+            && mouseY >= menuY + CTX_ITEM_H * 3 + 6 && mouseY <= menuY + menuH;
+        ColoredTextureRenderer.drawWithAlpha(g, UiTextureManager.rl(hoverBlock ? UiElement.CONTEXT_HOVER : UiElement.SIDEBAR_SELECTED),
+            menuX + 1, menuY + CTX_ITEM_H * 3 + 6, CTX_W - 2, CTX_ITEM_H, alpha);
+        drawTextureIconAlpha(g, iconTex("block"), menuX + 5, menuY + CTX_ITEM_H * 3 + 8, 12, alpha);
         ChatMessageStore.ChatMessage avaMsg = ChatMessageStore.getMessageAt(contextAvatarIndex);
         boolean isBlocked = avaMsg != null
             && ChatMessageStore.isPlayerBlocked(avaMsg.rawPlayerName(), avaMsg.senderName(),
                 ChatBubbleClientSetup.config().blockedPlayers());
         g.drawText(textRenderer, Text.translatable(isBlocked ? "e33chat.context.unblock" : "e33chat.context.block").getString(),
-            menuX + 22, menuY + CTX_ITEM_H * 2 + 8, c().textPrimary(), false);
+            menuX + 22, menuY + CTX_ITEM_H * 3 + 10, c().textPrimary(), false);
     }
 
     private static final int REPLY_BAR_H = 18;

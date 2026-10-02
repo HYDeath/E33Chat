@@ -96,6 +96,7 @@
   "e33chat.context.quote": "Quote",
   "e33chat.context.tp": "Teleport",
   "e33chat.context.tpa": "Request TP",
+  "e33chat.context.mention": "Mention",
   "e33chat.context.whisper": "Whisper",
   "e33chat.context.block": "Block Player",
   "e33chat.context.unblock": "Unblock",

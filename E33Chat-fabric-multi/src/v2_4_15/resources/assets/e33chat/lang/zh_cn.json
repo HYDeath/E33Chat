@@ -100,6 +100,7 @@
   "e33chat.context.quote": "引用",
   "e33chat.context.tp": "传送",
   "e33chat.context.tpa": "请求传送",
+  "e33chat.context.mention": "艾特",
   "e33chat.context.whisper": "私聊",
   "e33chat.context.block": "屏蔽玩家",
   "e33chat.context.unblock": "取消屏蔽",
