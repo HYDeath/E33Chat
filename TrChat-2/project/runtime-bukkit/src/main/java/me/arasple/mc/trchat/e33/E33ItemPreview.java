@@ -71,12 +71,16 @@ public final class E33ItemPreview {
 
     private static String slot(ItemStack item) {
         if (item == null || item.getType().isAir() || placeholder(item)) return "-";
+        item = E33CraftEngineItems.present(item, null);
+        if (item == null || item.getType().isAir()) return "-";
         String name = "";
         if (item.hasItemMeta() && item.getItemMeta().hasDisplayName())
             name = item.getItemMeta().getDisplayName().replaceAll("(?i)§.", "");
         name = name.replace('\u001e', ' ').replace('\u001f', ' ').replace('\n', ' ').replace('\r', ' ');
         if (name.length() > 32) name = name.substring(0, 32);
-        return item.getType().getKey() + "\u001f" + item.getAmount() + "\u001f" + modelData(item) + "\u001f" + name;
+        String encoded = item.getType().getKey() + "\u001f" + item.getAmount() + "\u001f" + modelData(item) + "\u001f" + name;
+        String model = itemModel(item);
+        return model.isEmpty() ? encoded : encoded + "\u001f" + model;
     }
 
     private static boolean placeholder(ItemStack item) {
@@ -97,6 +101,27 @@ public final class E33ItemPreview {
             return value instanceof Number number ? number.intValue() : 0;
         } catch (ReflectiveOperationException | LinkageError ignored) {
             return 0;
+        }
+    }
+
+    /** 1.21.2+ item_model id. Older servers have no such component. */
+    private static String itemModel(ItemStack item) {
+        try {
+            if (item == null || !item.hasItemMeta()) return "";
+            Object meta = item.getItemMeta();
+            Object key = null;
+            for (java.lang.reflect.Method method : meta.getClass().getMethods()) {
+                if ("getItemModel".equals(method.getName()) && method.getParameterCount() == 0) {
+                    key = method.invoke(meta);
+                    break;
+                }
+            }
+            if (key == null) return "";
+            String text = String.valueOf(key);
+            if (text.indexOf(':') <= 0 || text.indexOf('\u001e') >= 0 || text.indexOf('\u001f') >= 0) return "";
+            return text.length() > 80 ? text.substring(0, 80) : text;
+        } catch (ReflectiveOperationException | LinkageError ignored) {
+            return "";
         }
     }
 

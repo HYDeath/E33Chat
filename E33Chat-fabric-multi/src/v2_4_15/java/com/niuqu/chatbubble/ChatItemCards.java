@@ -243,7 +243,9 @@ public final class ChatItemCards {
             String[] fields = piece.split("\u001f", -1);
             int count = fields.length > 1 ? parse(fields[1], 1) : 1;
             int cmd = fields.length > 2 ? parse(fields[2], 0) : 0;
-            slots.add(stack(fields[0], count, cmd));
+            String name = fields.length > 3 ? fields[3] : "";
+            String model = fields.length > 4 ? fields[4] : "";
+            slots.add(stack(fields[0], count, cmd, model, name));
         }
         return slots;
     }
@@ -374,14 +376,13 @@ public final class ChatItemCards {
     }
 
     private static ItemStack stack(String id, int count, int modelData) {
+        return stack(id, count, modelData, "", "");
+    }
+
+    private static ItemStack stack(String id, int count, int modelData, String itemModel, String name) {
         try {
-            String[] parts = id.split(":", 2);
-            String namespace = parts.length == 2 ? parts[0] : "minecraft";
-            String path = parts.length == 2 ? parts[1] : parts[0];
-            Class<?> identifiers = Class.forName("net.minecraft.util.Identifier");
-            Object identifier;
-            try { identifier = identifiers.getMethod("of", String.class, String.class).invoke(null, namespace, path); }
-            catch (NoSuchMethodException ex) { identifier = identifiers.getConstructor(String.class, String.class).newInstance(namespace, path); }
+            Object identifier = identifier(id);
+            if (identifier == null) return ItemStack.EMPTY;
             Object registry = registryItem();
             Object item = null;
             for (Method method : registry.getClass().getMethods()) {
@@ -393,8 +394,106 @@ public final class ChatItemCards {
             }
             if (!(item instanceof net.minecraft.item.Item)) return ItemStack.EMPTY;
             ItemStack stack = new ItemStack((net.minecraft.item.Item) item, Math.max(1, count));
+            applySnapshot(stack, modelData, itemModel, name);
             return stack;
         } catch (Throwable ignored) { return ItemStack.EMPTY; }
+    }
+
+    private static Object identifier(String id) throws Exception {
+        String[] parts = id.split(":", 2);
+        String namespace = parts.length == 2 ? parts[0] : "minecraft";
+        String path = parts.length == 2 ? parts[1] : parts[0];
+        Class<?> identifiers = null;
+        for (String type : new String[] {"net.minecraft.util.Identifier", "net.minecraft.resources.Identifier"}) {
+            try { identifiers = Class.forName(type); break; }
+            catch (ClassNotFoundException ignored) { }
+        }
+        if (identifiers == null) return null;
+        try { return identifiers.getMethod("of", String.class, String.class).invoke(null, namespace, path); }
+        catch (NoSuchMethodException ex) { return identifiers.getConstructor(String.class, String.class).newInstance(namespace, path); }
+    }
+
+    /** Resource-pack models are selected by custom_model_data or item_model, not by the base item id. */
+    private static void applySnapshot(ItemStack stack, int modelData, String itemModel, String name) {
+        if (modelData > 0) applyCustomModelData(stack, modelData);
+        if (itemModel != null && itemModel.indexOf(':') > 0) applyItemModel(stack, itemModel);
+        if (name != null && !name.isBlank()) applyName(stack, name);
+    }
+
+    private static void applyCustomModelData(ItemStack stack, int modelData) {
+        try {
+            Class<?> types = componentTypes();
+            if (types == null) return;
+            Object componentType = types.getField("CUSTOM_MODEL_DATA").get(null);
+            Object data = customModelData(modelData);
+            if (data != null) setComponent(stack, componentType, data);
+        } catch (Throwable ignored) { }
+    }
+
+    private static void applyItemModel(ItemStack stack, String itemModel) {
+        try {
+            Class<?> types = componentTypes();
+            if (types == null) return;
+            Object componentType = types.getField("ITEM_MODEL").get(null);
+            Object id = identifier(itemModel);
+            if (id != null) setComponent(stack, componentType, id);
+        } catch (Throwable ignored) { }
+    }
+
+    private static void applyName(ItemStack stack, String name) {
+        try {
+            Class<?> types = componentTypes();
+            if (types == null) return;
+            Class<?> text = null;
+            for (String type : new String[] {"net.minecraft.text.Text", "net.minecraft.network.chat.Component"}) {
+                try { text = Class.forName(type); break; }
+                catch (ClassNotFoundException ignored) { }
+            }
+            if (text == null) return;
+            Object literal = text.getMethod("literal", String.class).invoke(null, name);
+            Object componentType = types.getField("CUSTOM_NAME").get(null);
+            setComponent(stack, componentType, literal);
+        } catch (Throwable ignored) { }
+    }
+
+    private static Class<?> componentTypes() {
+        for (String type : new String[] {
+            "net.minecraft.component.DataComponentTypes",
+            "net.minecraft.core.component.DataComponents"
+        }) {
+            try { return Class.forName(type); }
+            catch (ClassNotFoundException ignored) { }
+        }
+        return null;
+    }
+
+    private static Object customModelData(int modelData) throws Exception {
+        Class<?> cls = null;
+        for (String type : new String[] {
+            "net.minecraft.component.type.CustomModelDataComponent",
+            "net.minecraft.world.item.component.CustomModelData"
+        }) {
+            try { cls = Class.forName(type); break; }
+            catch (ClassNotFoundException ignored) { }
+        }
+        if (cls == null) return null;
+        try {
+            return cls.getConstructor(int.class).newInstance(modelData);
+        } catch (NoSuchMethodException ignored) { }
+        try {
+            return cls.getConstructor(List.class, List.class, List.class, List.class)
+                .newInstance(List.of((float) modelData), List.of(), List.of(), List.of());
+        } catch (NoSuchMethodException ignored) { }
+        return null;
+    }
+
+    private static void setComponent(ItemStack stack, Object componentType, Object value) throws ReflectiveOperationException {
+        for (Method method : stack.getClass().getMethods()) {
+            if (!"set".equals(method.getName()) || method.getParameterCount() != 2) continue;
+            if (!method.getParameterTypes()[0].isInstance(componentType)) continue;
+            method.invoke(stack, componentType, value);
+            return;
+        }
     }
 
     private static Object registryItem() throws ReflectiveOperationException {

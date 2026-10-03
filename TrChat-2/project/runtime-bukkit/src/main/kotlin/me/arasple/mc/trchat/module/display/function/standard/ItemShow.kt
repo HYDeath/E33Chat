@@ -140,7 +140,7 @@ object ItemShow : Function("ITEM") {
                 }
                 sender.getComponentFromLang("Function-Item-Show-Format-With-Hopper", newItem.amount, sha1) { type, i, part, proxySender ->
                     val component = if (part.isVariable && part.text == "item") {
-                        item.getNameComponent(sender).hoverItemFixed(newItem)
+                        item.getNameComponent(sender).hoverItemFixed(newItem, sender)
                     } else {
                         Components.text(part.text.translate(proxySender).replaceWithOrder(newItem.amount, sha1))
                     }
@@ -149,7 +149,7 @@ object ItemShow : Function("ITEM") {
             } else {
                 sender.getComponentFromLang("Function-Item-Show-Format-New", newItem.amount) { type, i, part, proxySender ->
                     val component = if (part.isVariable && part.text == "item") {
-                        item.getNameComponent(sender).hoverItemFixed(newItem)
+                        item.getNameComponent(sender).hoverItemFixed(newItem, sender)
                     } else {
                         Components.text(part.text.translate(proxySender).replaceWithOrder(newItem.amount))
                     }

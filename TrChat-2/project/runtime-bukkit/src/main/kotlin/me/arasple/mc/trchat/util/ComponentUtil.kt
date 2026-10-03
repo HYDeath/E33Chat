@@ -2,6 +2,7 @@ package me.arasple.mc.trchat.util
 
 import me.arasple.mc.trchat.TrChat
 import me.arasple.mc.trchat.api.nms.NMS
+import me.arasple.mc.trchat.e33.E33CraftEngineItems
 import me.arasple.mc.trchat.module.adventure.hoverItemAdventure
 import me.arasple.mc.trchat.util.color.colorify
 import net.md_5.bungee.api.chat.ComponentBuilder
@@ -32,8 +33,8 @@ fun String.parseSimple() = component().build {
     transform { it.colorify() }
 }
 
-fun ComponentText.hoverItemFixed(item: ItemStack): ComponentText {
-    var newItem = item.optimizeShulkerBox()
+fun ComponentText.hoverItemFixed(item: ItemStack, viewer: Player? = null): ComponentText {
+    var newItem = E33CraftEngineItems.present(item, viewer).optimizeShulkerBox()
     if (Components.useAdventure) {
         return hoverItemAdventure(newItem)
     }
