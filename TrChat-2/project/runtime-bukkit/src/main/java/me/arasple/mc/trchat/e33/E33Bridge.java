@@ -769,7 +769,7 @@ public final class E33Bridge implements Listener, PluginMessageListener {
     }
 
     private void sendBridgePacket(Player receiver, byte[] bytes) throws IOException {
-        E33Protocol.BridgeChat chat = E33Protocol.bridgeChat(bytes);
+        E33Protocol.BridgeChat chat = E33ItemHoverCompat.adaptBridge(E33Protocol.bridgeChat(bytes), receiver);
         if (receiver.getListeningPluginChannels().contains(E33DownstreamProtocol.CHANNEL)
             || receiver.getListeningPluginChannels().contains(PREFIX + "bridge_chat_v2"))
             sendNow(receiver, "bridge_chat_v2", E33Protocol.bridgeChat(chat));

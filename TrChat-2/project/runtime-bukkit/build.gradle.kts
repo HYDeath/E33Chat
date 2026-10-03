@@ -14,6 +14,9 @@ dependencies {
     compileOnly("net.kyori:adventure-text-serializer-gson:4.26.1")
     compileOnly("net.kyori:adventure-text-minimessage:4.26.1")
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testImplementation("net.kyori:adventure-api:4.26.1")
+    testImplementation("net.kyori:adventure-text-serializer-gson:4.26.1")
+    testImplementation("net.kyori:adventure-text-serializer-plain:4.26.1")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     compileOnly(fileTree(rootDir.resolve("libs")))
 

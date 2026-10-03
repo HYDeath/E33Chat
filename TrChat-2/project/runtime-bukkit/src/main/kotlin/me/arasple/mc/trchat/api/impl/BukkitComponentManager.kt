@@ -4,6 +4,7 @@ import com.google.common.cache.Cache
 import com.google.common.cache.CacheBuilder
 import me.arasple.mc.trchat.TrChat
 import me.arasple.mc.trchat.e33.E33Bridge
+import me.arasple.mc.trchat.e33.E33ItemHoverCompat
 import me.arasple.mc.trchat.api.ComponentManager
 import me.arasple.mc.trchat.api.event.TrChatReceiveEvent
 import me.arasple.mc.trchat.api.nms.NMS
@@ -89,7 +90,7 @@ object BukkitComponentManager : ComponentManager {
             val bridgeChat = uuid?.let { E33Bridge.stagedBase64(it) }.orEmpty()
             commandSender.scheduler.run(bukkitPlugin, {
                 if (bridgeChat.isEmpty() || !E33Bridge.sendBridgeBytes(commandSender, bridgeChat))
-                    commandSender.sendMessage(rendered)
+                    commandSender.sendMessage(E33ItemHoverCompat.componentFor(commandSender, rendered))
             }, null)
         } else {
             newComponent.sendTo(adaptCommandSender(commandSender))
