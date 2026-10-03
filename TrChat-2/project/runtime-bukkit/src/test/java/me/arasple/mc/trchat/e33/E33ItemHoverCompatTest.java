@@ -30,14 +30,19 @@ class E33ItemHoverCompatTest {
         Component legacy = E33ItemHoverCompat.forProtocol(source, 775);
         assertEquals(HoverEvent.Action.SHOW_TEXT, legacy.hoverEvent().action());
         assertEquals("/view-item 453d4327", legacy.clickEvent().value());
-        assertEquals("filled_map.dappled_forest_camp_map",
+        assertEquals("斑驳森林营地地图",
             PlainTextComponentSerializer.plainText().serialize(legacy));
-        assertEquals("物品", PlainTextComponentSerializer.plainText().serialize(
+        assertEquals("斑驳森林营地地图", PlainTextComponentSerializer.plainText().serialize(
             (Component) legacy.hoverEvent().value()));
 
         Component current = E33ItemHoverCompat.forProtocol(source, 777);
         assertSame(source, current);
         assertEquals(HoverEvent.Action.SHOW_ITEM, current.hoverEvent().action());
+    }
+
+    @Test void olderMapTranslationsStayOnTheClient() {
+        Component level = Component.translatable("filled_map.level");
+        assertSame(level, E33ItemHoverCompat.forProtocol(level, 775));
     }
 
     @Test void breadHoverSurvivesProtocol775() {

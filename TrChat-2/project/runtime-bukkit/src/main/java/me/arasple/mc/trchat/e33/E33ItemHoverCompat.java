@@ -1,9 +1,17 @@
 package me.arasple.mc.trchat.e33;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
@@ -18,7 +26,9 @@ import org.bukkit.entity.Player;
  * and 26.2 is 776. Explorer maps such as the Dappled Forest Camp Map are the item
  * {@code minecraft:abandoned_camp_map}, which those registries do not contain.
  * A {@code show_item} hover is decoded with the chat packet, so an unknown id
- * disconnects the client before the line can render.
+ * disconnects the client before the line can render. Dedicated servers only
+ * ship en_us, so names added in 26.3 are replaced with the official zh_cn
+ * strings for older protocols.
  */
 public final class E33ItemHoverCompat {
     public static final int PROTOCOL_26_3 = 777;
@@ -46,6 +56,7 @@ public final class E33ItemHoverCompat {
     private static volatile boolean viaChecked;
     private static volatile Object viaApi;
     private static volatile Method playerVersion;
+    private static volatile Map<String, String> simplifiedChinese;
 
     private E33ItemHoverCompat() {}
 
@@ -160,7 +171,7 @@ public final class E33ItemHoverCompat {
 
     private static boolean literalKey(String key) {
         if (key == null || key.isEmpty()) return false;
-        if (key.startsWith("filled_map.")) return true;
+        if (key.startsWith("filled_map.")) return key.contains("_camp");
         int dot = key.lastIndexOf('.');
         if (dot < 0 || dot == key.length() - 1) return false;
         if (!key.startsWith("item.minecraft.") && !key.startsWith("block.minecraft.")) return false;
@@ -168,6 +179,8 @@ public final class E33ItemHoverCompat {
     }
 
     private static String translate(String key) {
+        String chinese = simplifiedChinese().get(key);
+        if (chinese != null && !chinese.isBlank() && !chinese.equals(key)) return chinese;
         try {
             Class<?> type = Class.forName("net.minecraft.locale.Language");
             Object language = type.getMethod("getInstance").invoke(null);
@@ -176,10 +189,30 @@ public final class E33ItemHoverCompat {
                 if (!"getOrDefault".equals(method.getName()) || method.getParameterCount() != 1) continue;
                 if (method.getParameterTypes()[0] != String.class) continue;
                 Object value = method.invoke(language, key);
-                if (value instanceof String text && !text.isBlank()) return text;
+                if (value instanceof String text && !text.isBlank() && !text.equals(key)) return text;
             }
         } catch (Throwable ignored) { }
         return key;
+    }
+
+    /** Official 26.3 zh_cn strings. A dedicated server only ships en_us, so older clients would otherwise see English. */
+    private static Map<String, String> simplifiedChinese() {
+        Map<String, String> loaded = simplifiedChinese;
+        if (loaded != null) return loaded;
+        synchronized (E33ItemHoverCompat.class) {
+            if (simplifiedChinese != null) return simplifiedChinese;
+            Map<String, String> next = new java.util.HashMap<>();
+            try (InputStream in = E33ItemHoverCompat.class.getResourceAsStream("/e33/zh_cn_legacy.json")) {
+                if (in != null) {
+                    JsonObject object = new JsonParser().parse(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
+                    for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
+                        if (entry.getValue().isJsonPrimitive()) next.put(entry.getKey(), entry.getValue().getAsString());
+                    }
+                }
+            } catch (Exception ignored) { }
+            simplifiedChinese = Collections.unmodifiableMap(next);
+            return simplifiedChinese;
+        }
     }
 
     private static String plain(Component component) {
