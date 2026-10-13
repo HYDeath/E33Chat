@@ -21,7 +21,9 @@ import com.niuqu.chatbubble.image.ImageLoader;
 import com.niuqu.chatbubble.image.ImageUploader;
 import com.niuqu.chatbubble.render.Appearance;
 import com.niuqu.chatbubble.render.ChatBubbleTheme;
+import com.niuqu.chatbubble.render.ChatGradient;
 import com.niuqu.chatbubble.render.ChatTextSelection;
+import com.niuqu.chatbubble.render.LayoutBudget;
 import com.niuqu.chatbubble.render.TextSpan;
 import com.niuqu.chatbubble.store.ChatMessageStore;
 import com.niuqu.chatbubble.network.QuoteSyncPayload;
@@ -54,6 +56,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -187,17 +190,42 @@ public class ChatBubbleScreen extends ChatScreen {
     private int contextAvatarIndex = -1;
     private int contextAvatarX, contextAvatarY;
 
-    // Per-frame wrap cache: every message is measured once (layout pass) and
-    // rendered once (bubble pass), and both call getMsgHeight -> wrapContent.
-    // Without the cache each message gets re-wrapped 3x per frame.
-    private final Map<ChatMessageStore.ChatMessage, Integer> msgHeightCache =
+    // Heights and image parses stay across frames and across openings. A message
+    // record is immutable, so identity is a safe key. The signature below drops
+    // both maps when width, font, scale or image state changes.
+    private static final Map<ChatMessageStore.ChatMessage, Integer> HEIGHTS = new IdentityHashMap<>();
+    private static final Map<ChatMessageStore.ChatMessage, BracketCodec.ParseResult> IMAGES =
         new IdentityHashMap<>();
+    private static final Map<WrapKey, List<OrderedText>> WRAPS = new LinkedHashMap<>(128, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<WrapKey, List<OrderedText>> eldest) {
+            return size() > 256;
+        }
+    };
+    private static int layoutSig = Integer.MIN_VALUE;
+    private static final long MEASURE_BUDGET_NS = 3_000_000L;
+    private int measuredThisFrame;
 
-    // Image cards: parsed once per message (bracket strip + refs), invalidated
-    // when ImageLoader flips any entry's state (VERSION bumps).
-    private final Map<ChatMessageStore.ChatMessage, BracketCodec.ParseResult> imageParseCache =
-        new IdentityHashMap<>();
-    private int lastImageVersion = -1;
+    private static final class WrapKey {
+        private final Text text;
+        private final int width;
+
+        private WrapKey(Text text, int width) {
+            this.text = text;
+            this.width = width;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (!(other instanceof WrapKey key)) return false;
+            return text == key.text && width == key.width;
+        }
+
+        @Override
+        public int hashCode() {
+            return System.identityHashCode(text) * 31 + width;
+        }
+    }
     private static final int EMOTE_MAX_SIZE = 32;
 
 
@@ -234,6 +262,7 @@ public class ChatBubbleScreen extends ChatScreen {
 
     @Override
     protected void init() {
+        long openedAt = System.nanoTime();
         // The chat panel no longer hides the vanilla HUD. It is a left-aligned
         // column (~40% of the screen), so the hotbar, status effects and
         // HUD-drawn tooltips mostly sit outside it anyway; hiding them took the
@@ -357,6 +386,8 @@ public class ChatBubbleScreen extends ChatScreen {
             quickChatPanel.visible = false;
             quickChatInput.setVisible(false);
         });
+        ChatMessageStore.debugLog(() -> "[e33chat] chat open init "
+            + ((System.nanoTime() - openedAt) / 1_000_000L) + " ms");
     }
 
     /**
@@ -1751,12 +1782,7 @@ public class ChatBubbleScreen extends ChatScreen {
     }
 
     private void renderMessages(DrawContext g, int mouseX, int mouseY) {
-        msgHeightCache.clear();
-        int imgVersion = ImageLoader.version();
-        if (imgVersion != lastImageVersion) {
-            lastImageVersion = imgVersion;
-            imageParseCache.clear();
-        }
+        long frameStart = System.nanoTime();
         bubbleRects.clear();
         clickableSpans.clear();
         textSpans.clear();
@@ -1792,31 +1818,38 @@ public class ChatBubbleScreen extends ChatScreen {
         int effectiveMsgBottom = newMessageCount > 0 ? barTop - NOTIF_H - 1 : msgBottom;
         int areaH = effectiveMsgBottom - effectiveMsgTop;
 
-        String lastKey = null;
-        ChatMessageStore.ChatMessage prevMsg = null;
-        int totalH = 0;
-        for (var msg : messages) {
-            if (!msg.isSystem()) {
-                String key = timeKey(msg.time());
-                if (lastKey == null || !key.equals(lastKey)) {
-                    lastKey = key;
-                    totalH += TIME_SEP_H + Appearance.messageGap();
-                    prevMsg = null;
-                }
+        boolean openingFrame = firstRender;
+        measuredThisFrame = 0;
+        ensureLayoutCache();
+        pruneLayoutCache();
+        int count = messages.size();
+        int[] extra = new int[count];
+        boolean[] groupedRows = new boolean[count];
+        int[] body = new int[count];
+        fillRows(messages, extra, groupedRows, body);
+        int slack = areaH + Math.max(areaH, 1);
+        long deadline = System.nanoTime() + MEASURE_BUDGET_NS;
+        int covered = 0;
+        for (int i = count - 1; i >= 0; i--) {
+            if (body[i] < 0 && (covered < slack || System.nanoTime() < deadline)) {
+                body[i] = rememberBody(messages.get(i), groupedRows[i]);
             }
-            boolean grouped = ChatBubbleClientSetup.config().hideRepeatedAvatars() != null
-                && ChatBubbleClientSetup.config().hideRepeatedAvatars()
-                && MessageGrouping.isSameGroup(prevMsg, msg);
-            if (prevMsg != null) totalH += grouped ? MessageGrouping.groupedGap(Appearance.messageGap()) : Appearance.messageGap();
-            totalH += getMsgHeight(msg) - (grouped ? NAME_H : 0);
-            prevMsg = msg;
+            if (body[i] >= 0) covered += extra[i] + body[i];
         }
-        totalH += Appearance.messageGap();
+        int fallback = textRenderer.fontHeight + NAME_H;
+        int average = LayoutBudget.average(body, fallback);
+        for (int pass = 0; pass < 2; pass++) {
+            int guessTotal = LayoutBudget.total(extra, body, average) + Appearance.messageGap();
+            int guessOffset = MathHelper.clamp(scrollOffset, 0, Math.max(0, guessTotal - areaH));
+            measureVisible(messages, extra, groupedRows, body, average, guessOffset, areaH);
+            average = LayoutBudget.average(body, fallback);
+        }
+        int totalH = LayoutBudget.total(extra, body, average) + Appearance.messageGap();
+        int layoutAverage = average;
         int prevMaxScroll = maxScroll;
-        maxScroll = Math.max(0, totalH - areaH);
-        this.messageTotalH = totalH;
-
         boolean wasAtBottom = scrollOffset >= prevMaxScroll - 2;
+        boolean guessed = LayoutBudget.provisional(body);
+        int oldTotal = messageTotalH;
 
         String playerName = client.player != null ? client.player.getName().getString() : "";
         int currentMsgCount = messages.size();
@@ -1839,8 +1872,21 @@ public class ChatBubbleScreen extends ChatScreen {
             lastSeenMessageCount = currentMsgCount;
         }
 
-        if (firstRender) {
-            scrollOffset = maxScroll; scrollToBottom = false; firstRender = false; scrollAnimActive = false;
+        maxScroll = Math.max(0, totalH - areaH);
+        this.messageTotalH = totalH;
+        if (openingFrame) {
+            scrollOffset = maxScroll;
+            scrollToBottom = false;
+            firstRender = false;
+            scrollAnimActive = false;
+            int spent = measuredThisFrame;
+            ChatMessageStore.debugLog(() -> "[e33chat] chat first frame "
+                + ((System.nanoTime() - frameStart) / 1_000_000L)
+                + " ms, messages=" + count + ", measured=" + spent);
+        } else if (guessed) {
+            scrollOffset = LayoutBudget.anchor(wasAtBottom || scrollToBottom, scrollOffset, oldTotal, totalH, areaH);
+            scrollAnimActive = false;
+            scrollToBottom = false;
         } else if (scrollAnimActive) {
             float t = Animation.progress(scrollAnimStart, scrollAnimDuration, false);
             scrollOffset = Math.round(scrollAnimFrom + (scrollAnimTo - scrollAnimFrom) * t);
@@ -1864,7 +1910,7 @@ public class ChatBubbleScreen extends ChatScreen {
         while (fullIdx < fullList.size() && fullList.get(fullIdx) != messages.get(0)) fullIdx++;
 
         int contentY = 0;
-        lastKey = null;
+        String lastKey = null;
         ChatMessageStore.ChatMessage prevRenderMsg = null;
         for (int i = 0; i < messages.size(); i++) {
             var msg = messages.get(i);
@@ -1882,13 +1928,11 @@ public class ChatBubbleScreen extends ChatScreen {
                 }
             }
 
-            // showAvatar 必须用“上一条消息”比较；先赋值 prevRenderMsg 再比会恒自比（2.3.16 回归）。
-            // showAvatar=false 即紧凑分组（2.4.6）：无头像/名字行，高度减 NAME_H，间距收紧
-            boolean showAvatar = !(ChatBubbleClientSetup.config().hideRepeatedAvatars() != null
-                && ChatBubbleClientSetup.config().hideRepeatedAvatars()
-                && MessageGrouping.isSameGroup(prevRenderMsg, msg));
-            boolean grouped = !showAvatar;
-            int h = getMsgHeight(msg) - (grouped ? NAME_H : 0);
+            // showAvatar=false 即紧凑分组（2.4.6）：无头像/名字行，高度减 NAME_H，间距收紧。
+            // groupedRows 与测高时用的是同一次比较，避免两遍判定不一致。
+            boolean grouped = groupedRows[i];
+            boolean showAvatar = !grouped;
+            int h = body[i] >= 0 ? body[i] : layoutAverage;
             if (prevRenderMsg != null) {
                 contentY += grouped ? MessageGrouping.groupedGap(Appearance.messageGap()) : Appearance.messageGap();
             }
@@ -1934,7 +1978,7 @@ public class ChatBubbleScreen extends ChatScreen {
                 float bs = Appearance.bubbleScale(textRenderer.fontHeight);
                 int zMaxW = panelW - Appearance.avatarSize() - PAD * 2 - BUBBLE_PAD_X * 2 - 16;
                 int zW = 0;
-                for (var zl : wrapContent(msg.content(), Appearance.bubbleWrapWidth(zMaxW, textRenderer.fontHeight)))
+                for (var zl : wrapContent(msg.content(), Appearance.bubbleWrapWidth(zMaxW, textRenderer.fontHeight), true))
                     zW = Math.max(zW, textRenderer.getWidth(zl));
                 if (ChatLinks.firstCardUrl(msg.content()) != null)
                     zW = Math.max(zW, Math.min(LINK_CARD_W, Math.max(1, (int) (zMaxW / bs))));
@@ -1997,7 +2041,106 @@ public class ChatBubbleScreen extends ChatScreen {
         g.drawText(textRenderer, text, tx, y + 3, c().timeColor(), false);
     }
 
+    private void ensureLayoutCache() {
+        int sig = layoutSignature();
+        if (sig == layoutSig) return;
+        layoutSig = sig;
+        HEIGHTS.clear();
+        IMAGES.clear();
+        WRAPS.clear();
+    }
+
+    private int layoutSignature() {
+        int sig = panelW;
+        sig = sig * 31 + textRenderer.fontHeight;
+        sig = sig * 31 + Appearance.avatarSize();
+        sig = sig * 31 + Float.floatToIntBits(Appearance.bubbleScale(textRenderer.fontHeight));
+        Boolean images = ChatBubbleClientSetup.config().receiveImages();
+        sig = sig * 31 + (images != null && images ? 1 : 0);
+        sig = sig * 31 + ImageLoader.version();
+        String spec = NameplateBubbleScreen.selectedSpec();
+        sig = sig * 31 + (spec == null ? 0 : spec.hashCode());
+        sig = sig * 31 + System.identityHashCode(textRenderer);
+        return sig;
+    }
+
+    private void pruneLayoutCache() {
+        int live = ChatMessageStore.getMessages().size() + 64;
+        if (HEIGHTS.size() <= live && IMAGES.size() <= live) return;
+        IdentityHashMap<ChatMessageStore.ChatMessage, Boolean> keep = new IdentityHashMap<>();
+        for (ChatMessageStore.ChatMessage msg : ChatMessageStore.getMessages()) {
+            keep.put(msg, Boolean.TRUE);
+        }
+        HEIGHTS.keySet().removeIf(msg -> !keep.containsKey(msg));
+        IMAGES.keySet().removeIf(msg -> !keep.containsKey(msg));
+    }
+
+    private void fillRows(List<ChatMessageStore.ChatMessage> messages, int[] extra,
+                          boolean[] groupedRows, int[] body) {
+        String lastKey = null;
+        ChatMessageStore.ChatMessage prev = null;
+        boolean hide = ChatBubbleClientSetup.config().hideRepeatedAvatars() != null
+            && ChatBubbleClientSetup.config().hideRepeatedAvatars();
+        for (int i = 0; i < messages.size(); i++) {
+            ChatMessageStore.ChatMessage msg = messages.get(i);
+            int add = 0;
+            if (!msg.isSystem()) {
+                String key = timeKey(msg.time());
+                if (lastKey == null || !key.equals(lastKey)) {
+                    lastKey = key;
+                    add += TIME_SEP_H + Appearance.messageGap();
+                    prev = null;
+                }
+            }
+            boolean same = hide && MessageGrouping.isSameGroup(prev, msg);
+            groupedRows[i] = same;
+            if (prev != null) {
+                add += same ? MessageGrouping.groupedGap(Appearance.messageGap()) : Appearance.messageGap();
+            }
+            extra[i] = add;
+            Integer cached = HEIGHTS.get(msg);
+            body[i] = cached == null ? -1 : (same ? Math.max(0, cached - NAME_H) : cached);
+            prev = msg;
+        }
+    }
+
+    private int rememberBody(ChatMessageStore.ChatMessage msg, boolean grouped) {
+        measuredThisFrame++;
+        int full = getMsgHeight(msg);
+        return grouped ? Math.max(0, full - NAME_H) : full;
+    }
+
+    private void measureVisible(List<ChatMessageStore.ChatMessage> messages, int[] extra,
+                                boolean[] groupedRows, int[] body, int average, int offset, int areaH) {
+        int y = 0;
+        for (int i = 0; i < body.length; i++) {
+            y += extra[i];
+            int height = body[i] >= 0 ? body[i] : average;
+            if (body[i] < 0 && y + height > offset && y < offset + areaH) {
+                body[i] = rememberBody(messages.get(i), groupedRows[i]);
+                height = body[i];
+            }
+            y += height;
+        }
+    }
+
     private List<OrderedText> wrapContent(Text c, int width) {
+        return wrapContent(c, width, false);
+    }
+
+    /** {@code store} keeps the wrapped lines for drawing. Measuring must not fill this cache. */
+    private List<OrderedText> wrapContent(Text c, int width, boolean store) {
+        if (c == null) return List.of();
+        if (!store) return wrapContentUncached(c, width);
+        WrapKey key = new WrapKey(c, width);
+        List<OrderedText> hit = WRAPS.get(key);
+        if (hit != null) return hit;
+        List<OrderedText> wrapped = wrapContentUncached(c, width);
+        WRAPS.put(key, wrapped);
+        return wrapped;
+    }
+
+    private List<OrderedText> wrapContentUncached(Text c, int width) {
         c = ColorEmojiText.decorate(ChatLinks.linkify(c));
         List<Text> paras = new ArrayList<>();
         MutableText[] cur = { Text.empty() };
@@ -2165,7 +2308,7 @@ public class ChatBubbleScreen extends ChatScreen {
     }
 
     private int getMsgHeight(ChatMessageStore.ChatMessage msg) {
-        Integer cached = msgHeightCache.get(msg);
+        Integer cached = HEIGHTS.get(msg);
         if (cached != null) return cached;
         int h;
         String cardUrl = ChatLinks.firstCardUrl(msg.content());
@@ -2180,7 +2323,7 @@ public class ChatBubbleScreen extends ChatScreen {
                     && parsed.images().stream().allMatch(BracketCodec.ImageRef::emote)
                     && parsed.textWithoutImages().getString().isBlank()) {
                 h = NAME_H + textRenderer.fontHeight + 2 + EMOTE_MAX_SIZE + 2;
-                msgHeightCache.put(msg, h);
+                HEIGHTS.put(msg, h);
                 return h;
             }
             if (!parsed.images().isEmpty()) {
@@ -2191,7 +2334,7 @@ public class ChatBubbleScreen extends ChatScreen {
                 h = NAME_H + textH + imgH;
                 if (cardUrl != null) h += LINK_CARD_H + 3;
                 if (msg.replyContent() != null) h += textRenderer.fontHeight + 7;
-                msgHeightCache.put(msg, h);
+                HEIGHTS.put(msg, h);
                 return h;
             }
             java.util.List<ChatItemCards.Card> previewCards = ChatItemCards.find(parsed.textWithoutImages());
@@ -2208,7 +2351,7 @@ public class ChatBubbleScreen extends ChatScreen {
                 Text frame = frameSkin == null ? null : frameSkin.frame(Math.max(1, (int) (textW * fit)));
                 if (frame != null && textRenderer.getWidth(frame) <= bubbleMaxW) {
                     h = NAME_H + frameSkin.height();
-                    msgHeightCache.put(msg, h);
+                    HEIGHTS.put(msg, h);
                     return h;
                 }
             }
@@ -2225,7 +2368,7 @@ public class ChatBubbleScreen extends ChatScreen {
             if (msg.replyContent() != null) contentH += textRenderer.fontHeight + 7;
             h = NAME_H + (int) (contentH * s) + ChatItemCards.height(itemCards, textRenderer, bubbleMaxW);
         }
-        msgHeightCache.put(msg, h);
+        HEIGHTS.put(msg, h);
         return h;
     }
 
@@ -2236,10 +2379,10 @@ public class ChatBubbleScreen extends ChatScreen {
             return new BracketCodec.ParseResult(
                 BracketCodec.toPlaceholderText(msg.content()), java.util.List.of());
         }
-        BracketCodec.ParseResult cached = imageParseCache.get(msg);
+        BracketCodec.ParseResult cached = IMAGES.get(msg);
         if (cached != null) return cached;
         cached = BracketCodec.parseOrExtract(msg.content());
-        imageParseCache.put(msg, cached);
+        IMAGES.put(msg, cached);
         return cached;
     }
 
@@ -2296,7 +2439,7 @@ public class ChatBubbleScreen extends ChatScreen {
 
     private void renderBubble(DrawContext g, ChatMessageStore.ChatMessage msg, int index, int baseY, int mouseX, int mouseY, float alpha, boolean showAvatar) {
         if (msg.isSystem()) {
-            List<OrderedText> lines = wrapContent(msg.content(), panelW - PAD * 2 - 20);
+            List<OrderedText> lines = wrapContent(msg.content(), panelW - PAD * 2 - 20, true);
             int yy = baseY + 2;
             Style fb = findRootClickStyle(msg.content());
             int sysColor = ChatBubbleTheme.alphaBlend(c().textMuted(), (int)(255 * alpha));
@@ -2328,7 +2471,7 @@ public class ChatBubbleScreen extends ChatScreen {
             return;
         }
 
-        List<OrderedText> lines = wrapContent(parsed.textWithoutImages(), bubbleMaxW);
+        List<OrderedText> lines = wrapContent(parsed.textWithoutImages(), bubbleMaxW, true);
 
         // Any message carrying images renders bubble-less too (320px long-edge,
         // aspect preserved, stacked vertically, direction-aligned).
@@ -2347,7 +2490,7 @@ public class ChatBubbleScreen extends ChatScreen {
         int wrapW = craft > 0f ? Math.max(16, (int) (bubbleMaxW / craft))
             : skinEligible ? Math.max(16, bubbleMaxW - 24)
             : Appearance.bubbleWrapWidth(bubbleMaxW, textRenderer.fontHeight);
-        lines = visible.getString().isBlank() && !itemCards.isEmpty() ? List.of() : wrapContent(visible, wrapW);
+        lines = visible.getString().isBlank() && !itemCards.isEmpty() ? List.of() : wrapContent(visible, wrapW, true);
         int textW = 0;
         for (var line : lines) textW = Math.max(textW, textRenderer.getWidth(line));
         NameplateBubbleSkin frameSkin = skinEligible ? NameplateBubbleScreen.selectedSkin(Math.max(1, lines.size())) : null;
@@ -2357,7 +2500,7 @@ public class ChatBubbleScreen extends ChatScreen {
         boolean customFrame = frame != null && textRenderer.getWidth(frame) <= bubbleMaxW;
         if (skinEligible && !customFrame) {
             s = Appearance.bubbleScale(textRenderer.fontHeight);
-            lines = wrapContent(parsed.textWithoutImages(), Appearance.bubbleWrapWidth(bubbleMaxW, textRenderer.fontHeight));
+            lines = wrapContent(parsed.textWithoutImages(), Appearance.bubbleWrapWidth(bubbleMaxW, textRenderer.fontHeight), true);
             textW = 0;
             for (var line : lines) textW = Math.max(textW, textRenderer.getWidth(line));
         }
@@ -2847,7 +2990,7 @@ public class ChatBubbleScreen extends ChatScreen {
             // No underline, no click target: draw the line as-is except for the
             // selection recolor, which is why the name row still comes through here.
             if (range == null) {
-                g.drawText(textRenderer, line, x, y, color, false);
+                g.drawText(textRenderer, ChatGradient.flow(line), x, y, color, false);
                 return;
             }
             int[] idxPlain = {0};
@@ -2859,7 +3002,7 @@ public class ChatBubbleScreen extends ChatScreen {
                     ? st.withColor(plainFg) : st;
                 return sink.accept(i, out, cp);
             });
-            g.drawText(textRenderer, recolored, x, y, color, false);
+            g.drawText(textRenderer, ChatGradient.flow(recolored), x, y, color, false);
             return;
         }
 
@@ -2921,7 +3064,7 @@ public class ChatBubbleScreen extends ChatScreen {
             }
             return sink.accept(i, out, cp);
         });
-        g.drawText(textRenderer, decorated, x, y, color, false);
+        g.drawText(textRenderer, ChatGradient.flow(decorated), x, y, color, false);
     }
 
     private int prefixWidth(OrderedText line, int count) {
@@ -3198,8 +3341,8 @@ public class ChatBubbleScreen extends ChatScreen {
         textSelection.clear();
         sidebarScrollOffset = 0;
         sidebarMaxScroll = 0;
-        // msgHeightCache / bubbleRects / clickableSpans / textSpans are cleared
-        // every render pass, so they need no explicit reset here.
+        // Heights stay cached across frames. bubbleRects / clickableSpans / textSpans
+        // are cleared every render pass, so they need no explicit reset here.
     }
 
     private void executeMenuAction(int action) {

@@ -3,9 +3,12 @@ package com.niuqu.chatbubble;
 import com.niuqu.chatbubble.render.RoundRectRenderer;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import net.minecraft.client.font.TextRenderer;
 //#if MC >= 12000
 import net.minecraft.client.gui.DrawContext;
@@ -22,6 +25,10 @@ import net.minecraft.text.Text;
 public final class ChatItemCards {
     private static final String MARK = "e33.show/1/";
     private static final int SLOT = 16;
+    private static final int CARD_CACHE_CAP = 512;
+    private static final Pattern DECORATION = Pattern.compile("[\\[\\]\\sxX×0-9§&]");
+    private static final Map<Text, List<Card>> FOUND = new IdentityHashMap<>();
+    private static final Map<Text, Text> STRIPPED = new IdentityHashMap<>();
 
     public static final class Card {
         final Style style;
@@ -54,29 +61,49 @@ public final class ChatItemCards {
     private ChatItemCards() {}
 
     public static List<Card> find(Text text) {
+        if (text == null) return List.of();
+        List<Card> cached = FOUND.get(text);
+        if (cached != null) return cached;
         List<Card> cards = new ArrayList<>();
-        if (text == null) return cards;
         text.visit((style, part) -> {
             Card card = card(style);
             if (card != null) cards.add(card);
             return Optional.empty();
         }, Style.EMPTY);
-        return cards;
+        if (FOUND.size() > CARD_CACHE_CAP) {
+            FOUND.clear();
+            STRIPPED.clear();
+        }
+        List<Card> stored = cards.isEmpty() ? List.of() : List.copyOf(cards);
+        FOUND.put(text, stored);
+        return stored;
     }
 
     public static Text without(Text text) {
-        if (text == null || find(text).isEmpty()) return text;
-        MutableText out = Text.empty();
-        boolean[] any = {false};
-        text.visit((style, part) -> {
-            boolean decoration = part.replaceAll("[\\[\\]\\sxX×0-9§&]", "").isEmpty();
-            if (card(style) == null && !part.isEmpty() && !decoration) {
-                out.append(Text.literal(part).setStyle(style));
-                any[0] = true;
-            }
-            return Optional.empty();
-        }, Style.EMPTY);
-        return any[0] ? out : Text.empty();
+        if (text == null) return null;
+        if (STRIPPED.containsKey(text)) return STRIPPED.get(text);
+        Text stripped;
+        if (find(text).isEmpty()) {
+            stripped = text;
+        } else {
+            MutableText out = Text.empty();
+            boolean[] any = {false};
+            text.visit((style, part) -> {
+                boolean decoration = DECORATION.matcher(part).replaceAll("").isEmpty();
+                if (card(style) == null && !part.isEmpty() && !decoration) {
+                    out.append(Text.literal(part).setStyle(style));
+                    any[0] = true;
+                }
+                return Optional.empty();
+            }, Style.EMPTY);
+            stripped = any[0] ? out : Text.empty();
+        }
+        if (STRIPPED.size() > CARD_CACHE_CAP) {
+            FOUND.clear();
+            STRIPPED.clear();
+        }
+        STRIPPED.put(text, stripped);
+        return stripped;
     }
 
     public static int width(List<Card> cards, TextRenderer font, int maxWidth) {

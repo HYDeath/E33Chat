@@ -78,6 +78,8 @@ public final class NameplateBubbleScreen extends Screen {
 
     static boolean hasSelectedSkin() { return !selectedSkinSpec.isEmpty(); }
 
+    static String selectedSpec() { return selectedSkinSpec; }
+
     public static void clearCatalog() {
         catalogue.clear();
         selectedSkinSpec = "";

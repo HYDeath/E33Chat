@@ -134,6 +134,7 @@ public class ChatBubbleClientSetup implements ClientModInitializer {
             com.niuqu.chatbubble.chat.GroupChannelState.reset();
             com.niuqu.chatbubble.store.ChatMessageStore.clearSeenPlayers();
             com.niuqu.chatbubble.network.ClientHelloPayload.send();
+            warmChatClasses();
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             BridgeIntegration.onDisconnect();
@@ -212,5 +213,31 @@ public class ChatBubbleClientSetup implements ClientModInitializer {
                 }
             }
         );
+    }
+
+    /**
+     * The chat panel class is large. Linking it on the render thread the first
+     * time the bar opens costs a visible hitch, so do that work after join
+     * without running static initialisers.
+     */
+    private static void warmChatClasses() {
+        Thread thread = new Thread(() -> {
+            ClassLoader loader = ChatBubbleClientSetup.class.getClassLoader();
+            String[] names = {
+                "com.niuqu.chatbubble.ChatBubbleScreen",
+                "com.niuqu.chatbubble.ChatItemCards",
+                "com.niuqu.chatbubble.render.ChatGradient",
+                "com.niuqu.chatbubble.render.BlurRenderer",
+                "com.niuqu.chatbubble.render.SkinResolver"
+            };
+            for (String typeName : names) {
+                try {
+                    Class.forName(typeName, false, loader);
+                } catch (ClassNotFoundException ignored) {
+                }
+            }
+        }, "e33chat-warm");
+        thread.setDaemon(true);
+        thread.start();
     }
 }
