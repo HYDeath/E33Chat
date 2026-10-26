@@ -81,6 +81,8 @@ public final class XingchenBridge implements ClientModInitializer {
                         || "pm".equals(visibleActive) && recipient.isBlank()) {
                     visibleActive = "world";
                 }
+                // Follow only server-side channel changes, so the player can keep a
+                // manually selected tab until /ch changes the authoritative channel.
                 if (!visibleActive.equals(serverActive)) {
                     GroupChannelState.setActive(ChannelRouting.tab(visibleActive));
                     serverActive = visibleActive;

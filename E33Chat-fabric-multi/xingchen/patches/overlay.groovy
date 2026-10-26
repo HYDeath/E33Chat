@@ -15,7 +15,8 @@ edit('ChatBubbleScreen.java') { s ->
     s = replace(s, '        if (whisperPartner != null) return whisperPartner;',
         '        if (whisperPartner != null) return whisperPartner;\n        if (cn.xingchen.e33.client.XingchenBridge.ready() && "#private".equals(com.niuqu.chatbubble.chat.GroupChannelState.active())) return cn.xingchen.e33.client.XingchenBridge.recipient();')
     s = replace(s, '        tabs.add(new Object[]{cx[0], TAB_H - 2, "+", "+"});',
-        '        if (!cn.xingchen.e33.client.XingchenBridge.ready()) tabs.add(new Object[]{cx[0], TAB_H - 2, "+", "+"});')
+        '        if (!cn.xingchen.e33.client.XingchenBridge.ready()) {\n            tabs.add(new Object[]{cx[0], TAB_H - 2, "+", "+"});\n        }')
+    s = replace(s, '        for (String g : com.niuqu.chatbubble.chat.GroupChannelState.myGroups) add.accept(g, g);', '')
     s = replace(s, '        int overhead = 0;',
         '''        if (cn.xingchen.e33.client.XingchenBridge.ready()
                 && (whisperPartner == null || cn.xingchen.e33.client.XingchenBridge.prompt()))
@@ -29,7 +30,8 @@ edit('ChatBubbleScreen.java') { s ->
         if (xc && (whisperPartner == null || xcPrompt) && !text.startsWith("/")) {
             try { text = cn.xingchen.e33.client.XingchenBridge.outgoing(text); }
             catch (IllegalArgumentException ex) {
-                minecraft.player.sendSystemMessage(Component.literal("系统频道只读，请切换世界、公会或队伍频道"));
+                minecraft.player.sendSystemMessage(Component.literal(ex.getMessage() == null
+                        ? "无法切换到该频道" : ex.getMessage()));
                 return;
             }
         }
@@ -45,15 +47,22 @@ edit('ChatBubbleScreen.java') { s ->
             String partner = whisperPartner == null ? cn.xingchen.e33.client.XingchenBridge.recipient() : whisperPartner;
             messages = partner.isBlank() ? java.util.List.of() : ChatMessageStore.getWhisperMessages(partner);
         } else {''')
-    s = replace(s, '            com.niuqu.chatbubble.chat.GroupChannelState.TAB_SYSTEM);',
-        '''            com.niuqu.chatbubble.chat.GroupChannelState.TAB_SYSTEM);
-        if (cn.xingchen.e33.client.XingchenBridge.ready() && !cn.xingchen.e33.client.XingchenBridge.recipient().isBlank())
-            add.accept("私聊", "#private");''')
+    s = replace(s, '''        add.accept(Component.translatable("e33chat.group.tab_world").getString(),
+            com.niuqu.chatbubble.chat.GroupChannelState.TAB_WORLD);
+        add.accept(Component.translatable("e33chat.group.tab_system").getString(),
+            com.niuqu.chatbubble.chat.GroupChannelState.TAB_SYSTEM);''',
+        '''        add.accept(Component.translatable("e33chat.group.tab_world").getString(),
+            com.niuqu.chatbubble.chat.GroupChannelState.TAB_WORLD);
+        add.accept("公会", "公会");
+        add.accept("队伍", "队伍");
+        add.accept("私聊", "#private");
+        add.accept(Component.translatable("e33chat.group.tab_system").getString(),
+            com.niuqu.chatbubble.chat.GroupChannelState.TAB_SYSTEM);''')
     s
 }
 edit('chat/GroupChannelState.java') { s ->
     s = replace(s, 'return TAB_WORLD.equals(tab) || TAB_SYSTEM.equals(tab);',
-        'return TAB_WORLD.equals(tab) || TAB_SYSTEM.equals(tab) || "#private".equals(tab);')
+        'return TAB_WORLD.equals(tab) || TAB_SYSTEM.equals(tab) || "公会".equals(tab) || "队伍".equals(tab) || "#private".equals(tab);')
     s
 }
 edit('store/ChatMessageStore.java') { s ->
