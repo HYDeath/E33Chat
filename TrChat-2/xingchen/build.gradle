@@ -1,0 +1,34 @@
+plugins { id 'java' }
+group = 'cn.xingchen'
+version = '1.0.0+e33xc.1'
+java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+}
+def coreJar = providers.gradleProperty('xcCoreJar')
+if (!coreJar.isPresent() || !file(coreJar.get()).isFile()) {
+    throw new GradleException('Pass -PxcCoreJar=<current XC-Core.jar>; XC-Core is not bundled.')
+}
+dependencies {
+    compileOnly project(':api')
+    compileOnly files(coreJar.get())
+    compileOnly 'io.papermc.paper:paper-api:26.1.2.build.74-stable'
+    testImplementation 'io.papermc.paper:paper-api:26.1.2.build.74-stable'
+    testImplementation platform('org.junit:junit-bom:5.12.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testRuntimeOnly 'org.junit.platform:junit-platform-console'
+}
+sourceSets.main.java.srcDir('../../E33Chat-fabric-multi/xingchen/protocol/src/main/java')
+sourceSets.test.java.srcDir('../../E33Chat-fabric-multi/xingchen/protocol/src/test/java')
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.release = 25 }
+tasks.named('jar') { archiveFileName = 'E33Chat-Xingchen-26.3-plugin.jar' }
+tasks.named('test') { enabled = false }
+tasks.register('directTest', JavaExec) {
+    dependsOn 'testClasses'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.junit.platform.console.ConsoleLauncher'
+    args '--scan-classpath', '--disable-banner', '--details=summary'
+}
+tasks.named('check') { dependsOn 'directTest' }

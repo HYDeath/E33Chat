@@ -1,0 +1,7 @@
+name: E33Chat-Xingchen
+version: 1.0.0+xc.1
+main: cn.xingchen.e33.server.XingchenChatBridge
+api-version: '26.1'
+folia-supported: true
+depend: [XC-Core, XC-Chat]
+description: Recipient-scoped E33Chat channel adapter for Xingchen

@@ -1,0 +1,4 @@
+plugins { id 'net.fabricmc.fabric-loom' version '1.17.21' }
+apply from: '../shared/build.gradle'
+version = '2.4.15+xc.1'
+apply from: '../../xingchen/variant.gradle'

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "e33chat",
+  "version": "${version}",
+  "name": "E33Chat - Xingchen",
+  "description": "Xingchen world, guild, party and private chat integration",
+  "authors": ["E33EPUS"],
+  "license": "MIT",
+  "icon": "logo.png",
+  "environment": "client",
+  "custom": {"xingchen_channels": true},
+  "entrypoints": {
+    "main": ["com.niuqu.chatbubble.ChatBubbleMod"],
+    "client": ["com.niuqu.chatbubble.ChatBubbleClientSetup", "cn.xingchen.e33.client.XingchenBridge"],
+    "modmenu": ["com.niuqu.chatbubble.integration.ModMenuIntegration"]
+  },
+  "mixins": [
+    {"config": "e33chat.client.mixins.json", "environment": "client"},
+    {"config": "e33chat.gradient.mixins.json", "environment": "client"},
+    {"config": "e33chat.server.mixins.json"}
+  ],
+  "depends": {"fabricloader": ">=0.19.0", "minecraft": "26.3", "java": ">=25", "fabric-api": "*"},
+  "recommends": {"modmenu": ">=20.0.0"}
+}
