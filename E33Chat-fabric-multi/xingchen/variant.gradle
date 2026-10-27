@@ -1,6 +1,9 @@
 // An isolated source overlay; never mutate the general-purpose 26.3 target.
 // shared/build.gradle assigns rootProject.mod_version_26x; this variant owns its own version.
-version = '2.4.15+xc.2'
+version = '2.4.15+xc.3'
+tasks.named('processResources').configure {
+    inputs.property 'xingchenVersion', project.version.toString()
+}
 def xcRoot = rootProject.file('xingchen')
 sourceSets.main.java.srcDir(new File(xcRoot, 'src/main/java'))
 sourceSets.main.java.srcDir(new File(xcRoot, 'protocol/src/main/java'))

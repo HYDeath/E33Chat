@@ -24,9 +24,15 @@ public final class XingchenBridge implements ClientModInitializer {
     public static boolean prompt() { return prompt; }
     public static String recipient() { return recipient; }
     public static String outgoing(String text) {
-        return ChannelRouting.outgoing(text, GroupChannelState.active(), prompt, recipient);
+        return outgoing(text, null);
     }
-    public static int overhead() { return prompt ? 0 : 3; }
+    public static String outgoing(String text, String partner) {
+        return ChannelRouting.outgoing(text, partner == null ? GroupChannelState.active() : "#private",
+                prompt, partner == null ? recipient : partner);
+    }
+    public static int overhead(String partner) {
+        return prompt ? 0 : partner == null ? 3 : partner.length() + 4;
+    }
     public record Hello() implements CustomPacketPayload {
         public static final Type<Hello> ID = new Type<>(Identifier.parse(XcProtocol.HELLO));
         public static final StreamCodec<FriendlyByteBuf, Hello> CODEC = StreamCodec.of(
@@ -68,6 +74,7 @@ public final class XingchenBridge implements ClientModInitializer {
     private static void accept(XcProtocol.Packet packet) {
         switch (packet) {
             case XcProtocol.State state -> {
+                String previousRecipient = recipient;
                 ready = true; prompt = state.prompt(); recipient = state.recipient();
                 GroupChannelState.enabled = true;
                 var channels = new java.util.ArrayList<String>(2);
@@ -83,9 +90,14 @@ public final class XingchenBridge implements ClientModInitializer {
                 }
                 // Follow only server-side channel changes, so the player can keep a
                 // manually selected tab until /ch changes the authoritative channel.
-                if (!visibleActive.equals(serverActive)) {
+                if (!visibleActive.equals(serverActive)
+                        || "pm".equals(visibleActive) && !recipient.equals(previousRecipient)) {
                     GroupChannelState.setActive(ChannelRouting.tab(visibleActive));
                     serverActive = visibleActive;
+                    var mc = Minecraft.getInstance();
+                    if (mc.gui.screen() instanceof com.niuqu.chatbubble.ChatBubbleScreen screen) {
+                        screen.followXingchenChannel(visibleActive, recipient);
+                    }
                 }
             }
             case XcProtocol.Message message -> { if (ready) ChatMessageStore.addXingchenMessage(message); }

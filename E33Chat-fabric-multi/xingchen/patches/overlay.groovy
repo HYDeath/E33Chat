@@ -8,6 +8,27 @@ def replace = { String source, String from, String to ->
     source.replace(from, to)
 }
 edit('ChatBubbleScreen.java') { s ->
+    s = replace(s, 'private static boolean sidebarOpen;', 'private static boolean sidebarOpen = true;')
+    s = replace(s, '        this.initialText = initialText;',
+        '''        this.initialText = initialText;
+        if (cn.xingchen.e33.client.XingchenBridge.ready()
+                && "#private".equals(com.niuqu.chatbubble.chat.GroupChannelState.active()))
+            followXingchenChannel("pm", cn.xingchen.e33.client.XingchenBridge.recipient());''')
+    s = replace(s, '    private void insertAvatarMention(String name) {',
+        '''    public void followXingchenChannel(String channel, String recipient) {
+        whisperPartner = "pm".equals(channel) && recipient != null && !recipient.isBlank() ? recipient : null;
+        if (whisperPartner != null) ChatMessageStore.clearUnreadWhisper(whisperPartner);
+        scrollToBottom = true;
+    }
+
+    private void insertAvatarMention(String name) {''')
+    s = replace(s, 'String publicLabel = Component.translatable("e33chat.sidebar.public").getString();',
+        'String publicLabel = cn.xingchen.e33.client.XingchenBridge.ready() ? "综合" : Component.translatable("e33chat.sidebar.public").getString();')
+    s = replace(s, 'whisperPartner = null; sidebarSearchBox.setValue(""); setFocused(input); scrollToBottom = true; return true;',
+        '''whisperPartner = null;
+                if (cn.xingchen.e33.client.XingchenBridge.ready())
+                    com.niuqu.chatbubble.chat.GroupChannelState.setActive(com.niuqu.chatbubble.chat.GroupChannelState.TAB_ALL);
+                sidebarSearchBox.setValue(""); setFocused(input); scrollToBottom = true; return true;''')
     s = replace(s, '&& minecraft.getSingleplayerServer() == null;',
         '&& (cn.xingchen.e33.client.XingchenBridge.ready() || minecraft.getSingleplayerServer() == null);')
     s = replace(s, 'return Component.translatable("e33chat.sidebar.public").getString();',
@@ -18,17 +39,15 @@ edit('ChatBubbleScreen.java') { s ->
         '        if (!cn.xingchen.e33.client.XingchenBridge.ready()) {\n            tabs.add(new Object[]{cx[0], TAB_H - 2, "+", "+"});\n        }')
     s = replace(s, '        for (String g : com.niuqu.chatbubble.chat.GroupChannelState.myGroups) add.accept(g, g);', '')
     s = replace(s, '        int overhead = 0;',
-        '''        if (cn.xingchen.e33.client.XingchenBridge.ready()
-                && (whisperPartner == null || cn.xingchen.e33.client.XingchenBridge.prompt()))
-            return com.niuqu.chatbubble.ui.ChatEmojiPanel.CHAT_PACKET_LIMIT - cn.xingchen.e33.client.XingchenBridge.overhead();
+        '''        if (cn.xingchen.e33.client.XingchenBridge.ready())
+            return com.niuqu.chatbubble.ui.ChatEmojiPanel.CHAT_PACKET_LIMIT - cn.xingchen.e33.client.XingchenBridge.overhead(whisperPartner);
         int overhead = 0;''')
     s = replace(s, '        if (whisperPartner != null && !text.startsWith("/")) {',
-        '        if (whisperPartner != null && !text.startsWith("/")\n                && !(cn.xingchen.e33.client.XingchenBridge.ready() && cn.xingchen.e33.client.XingchenBridge.prompt())) {')
+        '        if (whisperPartner != null && !text.startsWith("/")\n                && !cn.xingchen.e33.client.XingchenBridge.ready()) {')
     s = replace(s, '        String groupTarget = null;',
         '''        boolean xc = cn.xingchen.e33.client.XingchenBridge.ready();
-        boolean xcPrompt = xc && cn.xingchen.e33.client.XingchenBridge.prompt();
-        if (xc && (whisperPartner == null || xcPrompt) && !text.startsWith("/")) {
-            try { text = cn.xingchen.e33.client.XingchenBridge.outgoing(text); }
+        if (xc && !text.startsWith("/")) {
+            try { text = cn.xingchen.e33.client.XingchenBridge.outgoing(text, whisperPartner); }
             catch (IllegalArgumentException ex) {
                 minecraft.player.sendSystemMessage(Component.literal(ex.getMessage() == null
                         ? "无法切换到该频道" : ex.getMessage()));
@@ -55,7 +74,6 @@ edit('ChatBubbleScreen.java') { s ->
             com.niuqu.chatbubble.chat.GroupChannelState.TAB_WORLD);
         add.accept("公会", "公会");
         add.accept("队伍", "队伍");
-        add.accept("私聊", "#private");
         add.accept(Component.translatable("e33chat.group.tab_system").getString(),
             com.niuqu.chatbubble.chat.GroupChannelState.TAB_SYSTEM);''')
     s
@@ -86,7 +104,7 @@ edit('store/ChatMessageStore.java') { s ->
         String group = switch (packet.channel()) { case "guild" -> "公会"; case "party" -> "队伍"; default -> null; };
         addMessage(body, packet.sender(), display, false, packet.account(), pm, partner, false, group);
         var mc = Minecraft.getInstance();
-        if (mc.gui != null && mc.gui.hud != null && rendered != null) {
+        if (!pm && mc.gui != null && mc.gui.hud != null && rendered != null) {
             projectingBridgeHud = true;
             try { mc.gui.hud.getChat().addClientSystemMessage(rendered); }
             finally { projectingBridgeHud = false; }
