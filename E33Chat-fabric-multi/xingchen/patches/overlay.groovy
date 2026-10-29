@@ -8,6 +8,30 @@ def replace = { String source, String from, String to ->
     source.replace(from, to)
 }
 edit('ChatBubbleScreen.java') { s ->
+    s = replace(s, '        if (fullscreen) {\n            return Math.max(100, width - panelX);',
+        '''        if (cn.xingchen.e33.client.XingchenBridge.ready())
+            return cn.xingchen.e33.client.XingchenLayout.panelWidth(physicalW, guiScale, width, panelX, fullscreen);
+        if (fullscreen) {
+            return Math.max(100, width - panelX);''')
+    s = replace(s, '        renderTitleBar(g, mouseX, mouseY, getBarAlpha());',
+        '''        renderTitleBar(g, mouseX, mouseY, getBarAlpha());
+        if (cn.xingchen.e33.client.XingchenBridge.ready()) {
+            int supportX = panelX + panelW - 68;
+            g.fill(supportX, titleY + 5, supportX + 48, titleY + 20, 0xEE17364D);
+            g.text(font, "联系客服", supportX + 4, titleY + 8, 0xFFFFD68B, false);
+        }''')
+    s = replace(s, '        // Panel contents are translated by panelOffset during the open/close slide;',
+        '''        if (cn.xingchen.e33.client.XingchenBridge.ready() && primaryClick(button)
+                && !isPanelSliding() && mouseY >= titleY + 5 && mouseY < titleY + 20
+                && mouseX >= panelX + panelW - 68 && mouseX < panelX + panelW - 20) {
+            minecraft.gui.setScreen(new cn.xingchen.e33.client.CustomerSupportScreen(this));
+            return true;
+        }
+        // Panel contents are translated by panelOffset during the open/close slide;''')
+    s = replace(s, 'int titleX = UiLayout.centerX(panelX, panelW, titleW);',
+        'int titleX = cn.xingchen.e33.client.XingchenBridge.ready() ? panelX + 24 : UiLayout.centerX(panelX, panelW, titleW);')
+    s = replace(s, 'String time = LocalTime.now().format(TIME_FMT);',
+        'String time = cn.xingchen.e33.client.XingchenBridge.ready() ? "" : LocalTime.now().format(TIME_FMT);')
     s = replace(s, 'private static boolean sidebarOpen;', 'private static boolean sidebarOpen = true;')
     s = replace(s, '        this.initialText = initialText;',
         '''        this.initialText = initialText;
