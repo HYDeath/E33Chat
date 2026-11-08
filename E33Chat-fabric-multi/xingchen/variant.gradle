@@ -1,6 +1,6 @@
 // An isolated source overlay; never mutate the general-purpose 26.3 target.
 // shared/build.gradle assigns rootProject.mod_version_26x; this variant owns its own version.
-version = '2.4.15+xc.4'
+version = '2.4.15+xc.5'
 tasks.named('processResources').configure {
     inputs.property 'xingchenVersion', project.version.toString()
 }
@@ -24,3 +24,4 @@ tasks.named('preprocessJava').configure {
     }
 }
 tasks.named('jar') { archiveFileName = "e33chat-Xingchen-Fabric-26.3-${version}.jar" }
+

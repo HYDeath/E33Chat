@@ -1,6 +1,6 @@
 package cn.xingchen.e33.client;
 
-/** Prevent legacy physical-pixel preferences from squeezing the conversation at high GUI scales. */
+/** Layout for the Xingchen chat panel: readable at every GUI scale, proportional to the window. */
 public final class XingchenLayout {
     private XingchenLayout() { }
 
@@ -13,13 +13,19 @@ public final class XingchenLayout {
         return true;
     }
 
+    /**
+     * A legacy physical-pixel preference must never collapse the conversation
+     * into a narrow column again. The panel keeps at least 60% of the space
+     * beside the sidebar and never exceeds 80%, so some of the world stays
+     * visible while messages have a normal reading width.
+     */
     public static int panelWidth(int physical, double scale, int width, int sidebar, boolean fullscreen) {
         int available = Math.max(1, width - sidebar);
         if (fullscreen) return available;
         double safeScale = Double.isFinite(scale) && scale > .01 ? scale : 1;
         int preferred = (int) Math.round(Math.max(0, physical) / safeScale);
-        int floor = Math.min(300, (int) Math.round(width * .56));
-        int cap = Math.min(available, Math.max(floor, (int) Math.round(width * .48)));
+        int floor = Math.min(available, Math.max(360, (int) Math.round(available * .60)));
+        int cap = Math.min(available, Math.max(floor, (int) Math.round(available * .80)));
         return Math.max(1, Math.min(cap, Math.max(floor, preferred)));
     }
 }
