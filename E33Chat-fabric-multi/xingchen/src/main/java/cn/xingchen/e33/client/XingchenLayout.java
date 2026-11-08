@@ -4,6 +4,15 @@ package cn.xingchen.e33.client;
 public final class XingchenLayout {
     private XingchenLayout() { }
 
+    /**
+     * The Xingchen client keeps this layout before the optional server bridge
+     * handshake too. The lobby has no XC-Core channel yet, but its chat screen
+     * still needs the same readable width as the formal server.
+     */
+    public static boolean useForVariant() {
+        return true;
+    }
+
     public static int panelWidth(int physical, double scale, int width, int sidebar, boolean fullscreen) {
         int available = Math.max(1, width - sidebar);
         if (fullscreen) return available;

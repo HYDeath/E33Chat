@@ -9,7 +9,7 @@ def replace = { String source, String from, String to ->
 }
 edit('ChatBubbleScreen.java') { s ->
     s = replace(s, '        if (fullscreen) {\n            return Math.max(100, width - panelX);',
-        '''        if (cn.xingchen.e33.client.XingchenBridge.ready())
+        '''        if (cn.xingchen.e33.client.XingchenLayout.useForVariant())
             return cn.xingchen.e33.client.XingchenLayout.panelWidth(physicalW, guiScale, width, panelX, fullscreen);
         if (fullscreen) {
             return Math.max(100, width - panelX);''')
